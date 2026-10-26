@@ -1,0 +1,73 @@
+#ifndef SETTINGS_GLSL
+#define SETTINGS_GLSL
+
+// ============================================================================
+// MAA-Shader: Cinematic-Realistic Lightweight Shaderpack Settings
+// ============================================================================
+
+// --- Shadow Settings ---
+#define SHADOW_MAP_RESOLUTION 2048      // [1024 1536 2048 3072 4096]
+#define SHADOW_DISTANCE 128.0           // [64.0 96.0 128.0 160.0 192.0 256.0]
+#define SHADOW_DISTORTION 0.85          // [0.70 0.80 0.85 0.90]
+#define SHADOW_PCF_SAMPLES 6            // [4 6 8 12]
+#define SHADOW_SOFTNESS 1.2             // [0.5 0.8 1.0 1.2 1.5 2.0]
+#define SHADOW_COLORED_GLASS            // Colored shadows through stained glass
+#define SHADOW_CONTACT_HARDENING        // Sharper shadows near contact point
+
+// --- Directional Blocklight & Tube Occlusion ("筒状光源の指向性") ---
+#define DIRECTIONAL_BLOCKLIGHT          // Reconstruct 3D light direction from gradient
+#define TUBE_OCCLUSION_STRENGTH 0.85    // [0.00 0.50 0.70 0.85 1.00]
+#define BLOCKLIGHT_OCCLUSION_STEPS 4    // [2 4 6 8]
+#define BLOCKLIGHT_INTENSITY 1.35       // [0.80 1.00 1.20 1.35 1.60 2.00]
+#define BLOCKLIGHT_DISTANCE_FALLOFF 1.5 // [1.0 1.25 1.5 1.75 2.0]
+
+// --- Handheld Dynamic Light ("手持ち光源") ---
+// 0: Adaptive Hybrid (Point + Forward Spot boost)
+// 1: Pure Omni-Directional Point Light (松明風全方位)
+// 2: Pure Directional Spotlight / Flashlight (懐中電灯風スポットライト)
+#define HANDLIGHT_MODE 0                // [0 1 2]
+#define HANDLIGHT_INTENSITY 1.25        // [0.00 0.50 0.80 1.00 1.25 1.50 2.00]
+#define HANDLIGHT_RANGE 18.0            // [10.0 14.0 18.0 24.0 32.0]
+#define HANDLIGHT_SMOOTH_SPEED 6.0      // [2.0 4.0 6.0 10.0 15.0] Lower = smoother transition
+#define SPOTLIGHT_INNER_COS 0.88        // Inner cone cosine (~28 deg)
+#define SPOTLIGHT_OUTER_COS 0.62        // Outer cone cosine (~51 deg)
+
+// --- Indirect Light Bounce (SSGI / "光の反射") ---
+#define ENABLE_SSGI                     // Screen-Space Global Illumination bounce
+#define SSGI_SAMPLES 4                  // [0 2 4 6 8]
+#define SSGI_STEPS 5                    // [3 4 5 6 8]
+#define SSGI_INTENSITY 1.15             // [0.50 0.80 1.00 1.15 1.50 2.00]
+
+// --- Specular & Screen-Space Reflections (SSR) ---
+#define ENABLE_SSR                      // Screen-space reflections on water & smooth blocks
+#define SSR_STEPS 12                    // [6 8 12 16 24]
+#define SPECULAR_STRENGTH 1.0           // [0.0 0.5 0.8 1.0 1.5]
+#define WETNESS_REFLECTION 0.85         // [0.0 0.5 0.85 1.0] Rain puddle reflections
+
+// --- Ambient & Shadow Visibility ("暗くなりすぎない設計") ---
+#define MIN_CAVE_BRIGHTNESS 0.085       // [0.03 0.05 0.085 0.12 0.18 0.25] Prevents pitch-black caves
+#define SKY_AMBIENT_INTENSITY 1.05      // [0.60 0.80 1.00 1.05 1.25 1.50]
+#define GROUND_BOUNCE_STRENGTH 0.28     // [0.10 0.20 0.28 0.40]
+#define ENABLE_AUTO_EXPOSURE            // Eye adaptation in dark caves / bright sunlight
+#define AUTO_EXPOSURE_SPEED 2.5         // [1.0 2.5 5.0 10.0]
+
+// --- Volumetric Fog & Colored Atmosphere ---
+#define ENABLE_VOLUMETRIC_FOG           // Colored light shafts & atmospheric fog
+#define VOLUMETRIC_STEPS 6              // [4 6 8 12]
+#define FOG_DENSITY_MULTIPLIER 1.0      // [0.0 0.5 0.8 1.0 1.5 2.0]
+#define COLORED_LIGHT_FOG_INFLUENCE 1.2 // [0.0 0.5 1.0 1.2 1.6]
+
+// --- Waving Foliage & Water Waves ---
+#define ENABLE_WAVING_FOLIAGE           // Waving leaves, grass, crops
+#define WAVING_SPEED 1.0                // [0.5 1.0 1.5 2.0]
+#define WATER_WAVE_STRENGTH 0.85        // [0.0 0.5 0.85 1.2]
+
+// --- Post-Processing & Cinematic Grading ---
+#define ENABLE_FXAA                     // Fast Approximate Anti-Aliasing
+#define CAS_SHARPENING 0.35             // [0.0 0.2 0.35 0.5 0.8]
+#define CINEMATIC_CONTRAST 1.06         // [0.90 1.00 1.06 1.12 1.20]
+#define CINEMATIC_SATURATION 1.08       // [0.80 0.95 1.00 1.08 1.20]
+#define SHADOW_TOE_LIFT 0.025           // [0.00 0.015 0.025 0.04 0.06] Lifts crushed darks
+
+#endif // SETTINGS_GLSL
+
