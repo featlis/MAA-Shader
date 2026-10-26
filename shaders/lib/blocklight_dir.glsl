@@ -24,26 +24,32 @@ struct BlocklightResult {
     float directionalOcclusion;
 };
 
-// Screen-space raymarch towards the inferred light source to occlude light behind tube walls
-float traceTubeWallOcclusion(
+// Screen-space raymarch towards the inferred light source:
+// - Opaque walls (depthtex1) occlude light behind tube walls
+// - Translucent stained glass (depthtex0 / MAT_STAINED_GLASS) transmits colored light & colored shadow
+// Returns: rgb = stained glass color filter, a = scalar visibility [0..1]
+vec4 traceTubeWallAndGlassOcclusion(
     vec3 viewPos,
     vec3 viewNormal,
     vec3 lightDirView,
     float searchDist,
     float dither,
-    sampler2D depthTex,
+    sampler2D depthTex0,
+    sampler2D depthTex1,
+    sampler2D colortex0,
     sampler2D colortex2,
     mat4 proj,
     mat4 projInv
 ) {
     int steps = BLOCKLIGHT_OCCLUSION_STEPS;
-    vec3 startPos = viewPos + viewNormal * 0.06;
+    vec3 startPos = viewPos + viewNormal * 0.05;
     vec3 stepVec = lightDirView * (searchDist / float(steps));
 
     float visibility = 1.0;
+    vec3 glassFilter = vec3(1.0);
 
     for (int i = 0; i < steps; i++) {
-        float t = float(i) + 0.35 + 0.65 * dither;
+        float t = float(i) + 0.30 + 0.70 * dither;
         vec3 rayPos = startPos + stepVec * t;
 
         vec3 screenPos = viewToScreen(rayPos, proj);
@@ -52,41 +58,58 @@ float traceTubeWallOcclusion(
             break;
         }
 
-        float sampleDepth = texture(depthTex, screenPos.xy).r;
-        if (sampleDepth >= 0.9999) continue;
+        float allDepth = texture(depthTex0, screenPos.xy).r;
+        if (allDepth >= 0.9999) continue;
 
-        vec3 geomViewPos = screenToView(screenPos.xy, sampleDepth, projInv);
+        float opaqueDepth = texture(depthTex1, screenPos.xy).r;
         float sampleMat = texture(colortex2, screenPos.xy).a;
 
-        // If we hit the emissive light block itself, the path to the light is clear!
+        // If we hit the emissive light block itself, the path to the light is unobstructed!
         if (isEmissiveMaterial(sampleMat)) {
-            visibility = min(visibility * 1.15, 1.0);
+            visibility = min(visibility * 1.20, 1.0);
             break;
         }
 
-        // In view space, Z is negative. geomViewPos.z > rayPos.z means geometry is closer to camera than the ray.
-        float depthDelta = geomViewPos.z - rayPos.z;
-        // Solid block thickness check (0.06m to 1.45m wall thickness for 1-block tube walls)
-        if (depthDelta > 0.055 && depthDelta < 1.45) {
-            // Tube wall or obstacle stands between surface and light direction
-            visibility *= mix(1.0, 0.22, TUBE_OCCLUSION_STRENGTH);
+        // Check if stained glass lies along the ray path
+        if (isMaterial(sampleMat, MAT_STAINED_GLASS)) {
+            vec3 glassViewPos = screenToView(screenPos.xy, allDepth, projInv);
+            float glassDelta = glassViewPos.z - rayPos.z;
+            if (glassDelta > -0.25 && glassDelta < 1.85) {
+                vec3 glassLinear = toLinear(texture(colortex0, screenPos.xy).rgb);
+                glassFilter *= getStainedGlassTransmission(glassLinear, 0.75);
+                visibility *= 0.88; // Slight glass attenuation (colored shadow)
+            }
+        } else if (!isMaterial(sampleMat, MAT_GLASS) && opaqueDepth < 0.9999) {
+            // Check solid opaque block occlusion (depthtex1)
+            vec3 opaqueViewPos = screenToView(screenPos.xy, opaqueDepth, projInv);
+            float depthDelta = opaqueViewPos.z - rayPos.z;
+            // Solid 1-block tube wall thickness check (0.05m to 1.50m)
+            if (depthDelta > 0.05 && depthDelta < 1.50) {
+                visibility *= mix(1.0, 0.14, TUBE_OCCLUSION_STRENGTH);
+            }
         }
     }
 
-    return clamp(visibility, 0.08, 1.0);
+    return vec4(glassFilter, clamp(visibility, 0.05, 1.0));
 }
 
 BlocklightResult computeDirectionalBlocklight(
     vec3 viewPos,
+    vec3 worldPos,
     vec3 viewNormal,
     vec2 texCoord,
+    vec3 surfaceAlbedoLinear,
     float rawBlockLight,
     float smoothness,
     float f0,
+    float matId,
+    float frameTimeCounter,
     float dither,
-    sampler2D colortex2,
+    sampler2D colortex0,
     sampler2D colortex1,
-    sampler2D depthTex,
+    sampler2D colortex2,
+    sampler2D depthTex0,
+    sampler2D depthTex1,
     mat4 proj,
     mat4 projInv
 ) {
@@ -97,26 +120,30 @@ BlocklightResult computeDirectionalBlocklight(
     res.lightDirView = viewNormal;
     res.directionalOcclusion = 1.0;
 
-    if (rawBlockLight <= 0.005) {
+    if (rawBlockLight <= 0.004) {
         return res;
     }
 
-    // Physical non-linear attenuation curve from vanilla [0..1] lightmap
-    float distRatio = 1.0 - rawBlockLight;
-    float physicalAtten = pow(rawBlockLight, BLOCKLIGHT_DISTANCE_FALLOFF) / (1.0 + 2.2 * distRatio * distRatio);
-    physicalAtten *= BLOCKLIGHT_INTENSITY;
+    // Crisp, physically accurate inverse-square attenuation + high-definition core near emitter
+    float distMeters = (1.0 - rawBlockLight) * 15.0;
+    float invSquare = 1.0 / (1.0 + 0.22 * distMeters * distMeters);
+    float rangeWindow = smoothstep(0.0, 0.18, rawBlockLight) * pow(rawBlockLight, BLOCKLIGHT_DISTANCE_FALLOFF * 0.62);
+    float coreDefinition = 1.0 + smoothstep(0.60, 0.96, rawBlockLight) * 0.95;
+    float physicalAtten = invSquare * rangeWindow * coreDefinition * BLOCKLIGHT_INTENSITY * 1.42;
 
     // Multi-scale screen-space neighborhood scan to reconstruct:
     // 1. 3D light gradient vector (direction of light propagation)
-    // 2. Nearby emissive block color (Soul Cyan, Redstone Red, Lava Orange, etc.)
-    // 3. Local enclosure / tube aperture
+    // 2. Exact nearby emissive block color (from both material ID and block texture chroma)
+    // 3. Stained glass color transmission between emitter and receiving surface
     vec3 gradAccum = vec3(0.0);
-    vec3 colorAccum = res.lightColor * 0.35;
-    float colorWeight = 0.35;
+    vec3 colorAccum = res.lightColor * 0.25;
+    float colorWeight = 0.25;
+    vec3 neighborGlassTint = vec3(1.0);
+    bool hasFlameSource = true;
 
     float viewDist = max(length(viewPos), 1.0);
-    vec2 shortRadius = vec2(0.004, 0.004 * 1.77) / clamp(viewDist * 0.15, 0.5, 3.0);
-    vec2 wideRadius  = vec2(0.028, 0.028 * 1.77) / clamp(viewDist * 0.12, 0.4, 2.5);
+    vec2 shortRadius = vec2(0.0045, 0.0045 * 1.77) / clamp(viewDist * 0.14, 0.45, 3.0);
+    vec2 wideRadius  = vec2(0.030,  0.030  * 1.77) / clamp(viewDist * 0.11, 0.40, 2.5);
 
     float rotAngle = dither * PI * 0.5;
     float s = sin(rotAngle);
@@ -128,10 +155,10 @@ BlocklightResult computeDirectionalBlocklight(
         vec2 sampleUV = texCoord + dir2D * ((i % 2 == 0) ? shortRadius : wideRadius);
         sampleUV = clamp(sampleUV, vec2(0.002), vec2(0.998));
 
-        vec4 nData = texture(colortex1, sampleUV);
+        vec4 nData  = texture(colortex1, sampleUV);
         float nLight = nData.b;
         float nMat   = texture(colortex2, sampleUV).a;
-        float nDepth = texture(depthTex, sampleUV).r;
+        float nDepth = texture(depthTex0, sampleUV).r;
 
         if (nDepth >= 0.9999) continue;
 
@@ -144,57 +171,81 @@ BlocklightResult computeDirectionalBlocklight(
             float lightDiff = nLight - rawBlockLight;
 
             if (isEmissiveMaterial(nMat)) {
-                lightDiff += 0.55;
-                vec3 eCol = getEmissiveColorFromMat(nMat, 1.0);
-                float w = 3.5 / (0.5 + dist3D);
+                lightDiff += 0.65;
+                vec3 nTexLinear = toLinear(texture(colortex0, sampleUV).rgb);
+                vec3 eCol = getEmissiveColorFromMatAndTex(nMat, nTexLinear, 1.0);
+                float w = 4.5 / (0.35 + dist3D);
                 colorAccum += eCol * w;
                 colorWeight += w;
-            } else if (nLight > rawBlockLight + 0.02) {
-                float w = (nLight - rawBlockLight) * 1.5 / (0.8 + dist3D * 0.5);
+
+                if (isMaterial(nMat, MAT_EMISSIVE_AQUA) || isMaterial(nMat, MAT_EMISSIVE_END) ||
+                    isMaterial(nMat, MAT_EMISSIVE_RED)  || isMaterial(nMat, MAT_EMISSIVE_GOLD)) {
+                    hasFlameSource = false;
+                }
+            } else if (isMaterial(nMat, MAT_STAINED_GLASS) && nLight >= rawBlockLight - 0.05) {
+                // Stained glass sits towards the brighter light direction!
+                vec3 gLinear = toLinear(texture(colortex0, sampleUV).rgb);
+                vec3 gFilter = getStainedGlassTransmission(gLinear, 0.78);
+                neighborGlassTint = mix(neighborGlassTint, gFilter, clamp(1.2 / (0.5 + dist3D), 0.2, 0.85));
+            } else if (nLight > rawBlockLight + 0.015) {
+                float w = (nLight - rawBlockLight) * 1.4 / (0.6 + dist3D * 0.45);
                 colorAccum += getEmissiveColorFromMat(MAT_EMISSIVE_WARM, nLight) * w;
                 colorWeight += w;
             }
 
-            float gradWeight = lightDiff / (0.25 + dist3D * 0.45);
+            float gradWeight = lightDiff / (0.20 + dist3D * 0.40);
             gradAccum += dir3D * gradWeight;
         }
     }
 
-    res.lightColor = colorAccum / max(colorWeight, 0.001);
+    res.lightColor = (colorAccum / max(colorWeight, 0.001)) * neighborGlassTint;
+
+    // Distant atmospheric light scintillation & natural flame flicker
+    float shimmer = computeLightShimmer(worldPos, viewDist, frameTimeCounter, hasFlameSource);
+    physicalAtten *= shimmer;
 
     #ifdef DIRECTIONAL_BLOCKLIGHT
     float gradMag = length(gradAccum);
-    if (gradMag > 0.008) {
+    if (gradMag > 0.006) {
         vec3 inferredDir = gradAccum / gradMag;
-        float directionality = clamp(gradMag * 3.2, 0.0, 0.88);
+        float directionality = clamp(gradMag * 3.6, 0.0, 0.92);
         res.lightDirView = normalize(mix(viewNormal, inferredDir, directionality));
 
-        float NoL = dot(viewNormal, res.lightDirView);
-        float directTerm = clamp((NoL + 0.30) / 1.30, 0.08, 1.25);
-
-        float searchDist = clamp((1.0 - rawBlockLight) * 6.5 + 0.6, 0.6, 4.5);
-        float wallVis = traceTubeWallOcclusion(
+        float searchDist = clamp((1.0 - rawBlockLight) * 6.8 + 0.65, 0.65, 4.8);
+        vec4 traceRes = traceTubeWallAndGlassOcclusion(
             viewPos, viewNormal, res.lightDirView, searchDist,
-            dither, depthTex, colortex2, proj, projInv
+            dither, depthTex0, depthTex1, colortex0, colortex2, proj, projInv
         );
 
-        float tubeBeamBoost = mix(1.0, 1.28, clamp(gradMag * 2.0, 0.0, 1.0) * wallVis);
+        res.lightColor *= traceRes.rgb;
+        float wallVis = traceRes.a;
+
+        float NoL = dot(viewNormal, res.lightDirView);
+        float directTerm = clamp((NoL + 0.22) / 1.22, 0.04, 1.32);
+
+        // Focused beam boost along unobstructed opening of a 4-walled tube
+        float tubeBeamBoost = mix(1.0, 1.42, clamp(gradMag * 2.2, 0.0, 1.0) * smoothstep(0.6, 1.0, wallVis));
         res.directionalOcclusion = mix(1.0, directTerm * wallVis * tubeBeamBoost, directionality * TUBE_OCCLUSION_STRENGTH);
     }
     #endif
 
-    res.diffuse = res.lightColor * physicalAtten * res.directionalOcclusion;
-
-    // Colored Specular Reflection from Blocklight
+    // Evaluate Physically-Based Oren-Nayar Diffuse + Cook-Torrance GGX Specular
     vec3 V = normalize(-viewPos);
-    vec3 H = normalize(res.lightDirView + V);
-    float NoH = max(dot(viewNormal, H), 0.0);
-    float VoH = max(dot(V, H), 0.0);
-    float specPower = exp2(4.0 + smoothness * 7.5);
-    float normFactor = (specPower + 2.0) * 0.125;
-    float specTerm = normFactor * pow(NoH, specPower) * fresnelSchlickScalar(VoH, f0);
+    vec3 pbrDiffuse = vec3(0.0);
+    vec3 pbrSpecular = vec3(0.0);
 
-    res.specular = res.lightColor * specTerm * physicalAtten * res.directionalOcclusion * smoothness * SPECULAR_STRENGTH;
+    // Blend between directional PBR L and hemisphere-wrapped L based on inferred directionality
+    vec3 effectiveL = normalize(mix(viewNormal, res.lightDirView, 0.78));
+    evaluatePBRSurface(
+        viewNormal, V, effectiveL, surfaceAlbedoLinear,
+        smoothness, f0, matId,
+        pbrDiffuse, pbrSpecular
+    );
+
+    vec3 radiance = res.lightColor * physicalAtten * res.directionalOcclusion;
+    res.diffuse  = radiance * max(pbrDiffuse, vec3(0.12 * (1.0 - f0)));
+    res.specular = radiance * pbrSpecular;
+
     return res;
 }
 
@@ -204,12 +255,17 @@ BlocklightResult computeDirectionalBlocklight(
 void computeHandheldLight(
     vec3 viewPos,
     vec3 viewNormal,
+    vec3 surfaceAlbedoLinear,
     float smoothHeldIntensity,
     vec3 heldLightColor,
     float smoothness,
     float f0,
+    float matId,
     float dither,
-    sampler2D depthTex,
+    sampler2D depthTex0,
+    sampler2D depthTex1,
+    sampler2D colortex0,
+    sampler2D colortex2,
     mat4 proj,
     mat4 projInv,
     out vec3 outDiffuse,
@@ -231,7 +287,11 @@ void computeHandheldLight(
     }
 
     vec3 L = toLight / dist;
-    float NoL = max(dot(viewNormal, L), 0.0);
+    float rawNoL = dot(viewNormal, L);
+    float wrappedNoL = clamp((rawNoL + 0.32) / 1.32, 0.0, 1.0);
+    if (wrappedNoL <= 0.001) {
+        return;
+    }
 
     float distNorm = clamp(dist / HANDLIGHT_RANGE, 0.0, 1.0);
     float window = clamp(1.0 - distNorm * distNorm * distNorm * distNorm, 0.0, 1.0);
@@ -240,47 +300,63 @@ void computeHandheldLight(
     vec3 lightToSurface = -L;
     float spotCos = dot(lightToSurface, vec3(0.0, 0.0, -1.0));
     float spotCone = smoothstep(SPOTLIGHT_OUTER_COS, SPOTLIGHT_INNER_COS, spotCos);
-    float spotProfile = pow(spotCone, 1.35) * 1.85;
+    float spotProfile = pow(spotCone, 1.25) * 2.05;
 
-    float pointAtten = (1.6 / (1.0 + 0.32 * dist * dist)) * window;
-    float spotAtten  = (2.4 / (1.0 + 0.14 * dist * dist)) * window * spotProfile;
+    float pointAtten = (1.75 / (1.0 + 0.30 * dist * dist)) * window;
+    float spotAtten  = (2.65 / (1.0 + 0.13 * dist * dist)) * window * spotProfile;
 
     float angularAtten;
     #if HANDLIGHT_MODE == 1
         angularAtten = pointAtten;
     #elif HANDLIGHT_MODE == 2
-        angularAtten = spotAtten + pointAtten * 0.12;
+        angularAtten = spotAtten + pointAtten * 0.10;
     #else
-        angularAtten = mix(pointAtten * 0.75, spotAtten, 0.55);
+        angularAtten = mix(pointAtten * 0.72, spotAtten, 0.58);
     #endif
 
-    // 4-step screen-space contact shadow from hand position
+    // 4-step screen-space contact shadow & stained glass transmission from hand position
     float contactShadow = 1.0;
+    vec3 glassFilter = vec3(1.0);
     vec3 rayStep = L * min(dist * 0.22, 0.45);
     vec3 rayPos = viewPos + viewNormal * 0.04;
     for (int i = 0; i < 4; i++) {
-        rayPos += rayStep * (0.6 + 0.6 * dither);
+        rayPos += rayStep * (0.55 + 0.65 * dither);
         vec3 sc = viewToScreen(rayPos, proj);
-        if (sc.x > 0.0 && sc.x < 1.0 && sc.y > 0.0 && sc.y < 1.0) {
-            float d = texture(depthTex, sc.xy).r;
-            vec3 gPos = screenToView(sc.xy, d, projInv);
-            float diff = gPos.z - rayPos.z;
-            if (diff > 0.04 && diff < 0.85) {
-                contactShadow *= 0.45;
+        if (sc.x > 0.002 && sc.x < 0.998 && sc.y > 0.002 && sc.y < 0.998) {
+            float sMat = texture(colortex2, sc.xy).a;
+            if (isMaterial(sMat, MAT_STAINED_GLASS)) {
+                float dAll = texture(depthTex0, sc.xy).r;
+                vec3 gPosAll = screenToView(sc.xy, dAll, projInv);
+                float diffAll = gPosAll.z - rayPos.z;
+                if (diffAll > -0.15 && diffAll < 1.10) {
+                    vec3 gCol = toLinear(texture(colortex0, sc.xy).rgb);
+                    glassFilter *= getStainedGlassTransmission(gCol, 0.78);
+                    contactShadow *= 0.88;
+                }
+            } else if (!isMaterial(sMat, MAT_GLASS)) {
+                float dOpaque = texture(depthTex1, sc.xy).r;
+                vec3 gPos = screenToView(sc.xy, dOpaque, projInv);
+                float diff = gPos.z - rayPos.z;
+                if (diff > 0.035 && diff < 0.85) {
+                    contactShadow *= 0.36;
+                }
             }
         }
     }
 
-    float totalLight = smoothHeldIntensity * HANDLIGHT_INTENSITY * angularAtten * contactShadow;
-    outDiffuse = heldLightColor * totalLight * (NoL * 0.85 + 0.15);
-
     vec3 V = normalize(-viewPos);
-    vec3 H = normalize(L + V);
-    float NoH = max(dot(viewNormal, H), 0.0);
-    float VoH = max(dot(V, H), 0.0);
-    float specPower = exp2(4.5 + smoothness * 8.0);
-    float spec = ((specPower + 2.0) * 0.125) * pow(NoH, specPower) * fresnelSchlickScalar(VoH, f0);
-    outSpecular = heldLightColor * totalLight * spec * NoL * smoothness * SPECULAR_STRENGTH;
+    vec3 effectiveL = normalize(mix(viewNormal, L, 0.78));
+    vec3 pbrDiffuse = vec3(0.0);
+    vec3 pbrSpecular = vec3(0.0);
+    evaluatePBRSurface(
+        viewNormal, V, effectiveL, surfaceAlbedoLinear,
+        smoothness, f0, matId,
+        pbrDiffuse, pbrSpecular
+    );
+
+    vec3 handRadiance = heldLightColor * glassFilter * (smoothHeldIntensity * HANDLIGHT_INTENSITY * angularAtten * contactShadow * wrappedNoL);
+    outDiffuse  = handRadiance * pbrDiffuse;
+    outSpecular = handRadiance * pbrSpecular * max(rawNoL, 0.0);
 }
 
 #endif // BLOCKLIGHT_DIR_GLSL

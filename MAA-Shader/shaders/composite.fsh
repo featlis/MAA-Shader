@@ -29,6 +29,7 @@ uniform sampler2D colortex1;
 uniform sampler2D colortex2;
 uniform sampler2D colortex5;
 uniform sampler2D depthtex0;
+uniform sampler2D depthtex1;
 uniform sampler2D shadowtex0;
 uniform sampler2D shadowtex1;
 uniform sampler2D shadowcolor0;
@@ -39,10 +40,12 @@ uniform mat4 gbufferModelViewInverse;
 uniform mat4 shadowModelView;
 uniform mat4 shadowProjection;
 
+uniform vec3 cameraPosition;
 uniform vec3 sunPosition;
 uniform vec3 shadowLightPosition;
 uniform float rainStrength;
 uniform float frameTime;
+uniform float frameTimeCounter;
 uniform int frameCounter;
 uniform int heldItemId;
 uniform int heldItemId2;
@@ -105,6 +108,7 @@ void main() {
 
     vec3 viewPos   = screenToView(vTexCoord, depth, gbufferProjectionInverse);
     vec3 playerPos = (gbufferModelViewInverse * vec4(viewPos, 1.0)).xyz;
+    vec3 worldPos  = playerPos + cameraPosition;
     vec3 worldNormal = normalize(mat3(gbufferModelViewInverse) * viewNormal);
 
     vec3 sunWorldDir = normalize(mat3(gbufferModelViewInverse) * normalize(sunPosition));
@@ -112,15 +116,15 @@ void main() {
 
     float dither = interleavedGradientNoise(gl_FragCoord.xy, frameCounter);
 
-    // 3. Direct Celestial Lighting (Sun / Moon) + Contact-Hardening Shadows
+    // 3. Direct Celestial Lighting (Sun / Moon) + Contact-Hardening & Stained Glass Shadows
     vec3 lightDirView = normalize(shadowLightPosition);
     float rawNoL = dot(viewNormal, lightDirView);
     float NoL = max(rawNoL, 0.0);
 
     float subsurface = 0.0;
     if (isMaterial(matId, MAT_FOLIAGE)) {
-        subsurface = max(-rawNoL, 0.0) * 0.55 + 0.20;
-        NoL = max(NoL, 0.25);
+        subsurface = max(-rawNoL, 0.0) * 0.55 + 0.18;
+        NoL = max(NoL, 0.22);
     }
 
     vec3 sunShadow = vec3(0.0);
@@ -129,53 +133,63 @@ void main() {
             sunShadow = vec3(smoothstep(0.1, 0.6, skyLight));
         } else {
             sunShadow = sampleDirectionalShadow(
-                playerPos, worldNormal, max(NoL, 0.15), dither,
+                playerPos, worldNormal, max(NoL, 0.12), dither,
                 shadowtex0, shadowtex1, shadowcolor0,
                 shadowModelView, shadowProjection
             );
-            sunShadow *= smoothstep(0.02, 0.35, skyLight);
+            sunShadow *= smoothstep(0.02, 0.32, skyLight);
         }
     }
 
     sunShadow = mix(sunShadow, vec3(0.45), rainStrength * 0.75);
 
-    vec3 directDiffuse = atm.directLight * sunShadow * (NoL + subsurface * vec3(0.95, 1.05, 0.65));
-
-    // Direct Sun/Moon Specular Reflection
+    // Evaluate Physically-Based Cook-Torrance GGX + Oren-Nayar BRDF for Sun/Moon
     vec3 V = normalize(-viewPos);
-    vec3 H = normalize(lightDirView + V);
-    float NoH = max(dot(viewNormal, H), 0.0);
-    float VoH = max(dot(V, H), 0.0);
-    float specPower = exp2(4.5 + smoothness * 8.0);
-    float sunSpecTerm = ((specPower + 2.0) * 0.125) * pow(NoH, specPower) * fresnelSchlickScalar(VoH, f0);
-    vec3 directSpecular = atm.directLight * sunShadow * sunSpecTerm * NoL * smoothness * SPECULAR_STRENGTH;
-
-    // 4. Directional Blocklight & Tube Occlusion
-    BlocklightResult blk = computeDirectionalBlocklight(
-        viewPos, viewNormal, vTexCoord, blockLight, smoothness, f0, dither,
-        colortex2, colortex1, depthtex0, gbufferProjection, gbufferProjectionInverse
+    vec3 sunDiffuseBRDF = vec3(0.0);
+    vec3 sunSpecularBRDF = vec3(0.0);
+    evaluatePBRSurface(
+        viewNormal, V, lightDirView, albedoLinear,
+        smoothness, f0, matId,
+        sunDiffuseBRDF, sunSpecularBRDF
     );
 
-    // 5. Smooth Handheld Dynamic Light (Point + Spotlight Cone)
+    vec3 directDiffuse  = atm.directLight * sunShadow * (sunDiffuseBRDF + subsurface * vec3(0.95, 1.05, 0.65));
+    vec3 directSpecular = atm.directLight * sunShadow * sunSpecularBRDF;
+
+    // 4. Directional Blocklight, Tube Occlusion & Stained Glass Transmission
+    BlocklightResult blk = computeDirectionalBlocklight(
+        viewPos, worldPos, viewNormal, vTexCoord, albedoLinear,
+        blockLight, smoothness, f0, matId, frameTimeCounter, dither,
+        colortex0, colortex1, colortex2, depthtex0, depthtex1,
+        gbufferProjection, gbufferProjectionInverse
+    );
+
+    // 5. Smooth Handheld Dynamic Light (Point + Spotlight Cone + Stained Glass Transmission)
     vec3 handDiffuse = vec3(0.0);
     vec3 handSpecular = vec3(0.0);
     computeHandheldLight(
-        viewPos, viewNormal, smoothHeldIntensity, smoothHeldColor, smoothness, f0, dither,
-        depthtex0, gbufferProjection, gbufferProjectionInverse,
+        viewPos, viewNormal, albedoLinear, smoothHeldIntensity, smoothHeldColor,
+        smoothness, f0, matId, dither,
+        depthtex0, depthtex1, colortex0, colortex2,
+        gbufferProjection, gbufferProjectionInverse,
         handDiffuse, handSpecular
     );
 
-    // 6. Emissive Surface Radiance
+    // 6. Emissive Surface Radiance with Block Chromaticity & Distant Scintillation
     vec3 emissiveRadiance = vec3(0.0);
     if (emission > 0.01) {
-        vec3 eTint = getEmissiveColorFromMat(matId, 1.0);
-        emissiveRadiance = mix(albedoLinear, albedoLinear * eTint * 1.4, 0.65) * emission * 3.2;
+        vec3 eTint = getEmissiveColorFromMatAndTex(matId, albedoLinear, 1.0);
+        bool isFlame = isMaterial(matId, MAT_EMISSIVE_WARM) ||
+                       isMaterial(matId, MAT_EMISSIVE_SOUL) ||
+                       isMaterial(matId, MAT_EMISSIVE_LAVA);
+        float emitterShimmer = computeLightShimmer(worldPos, length(viewPos), frameTimeCounter, isFlame);
+        emissiveRadiance = mix(albedoLinear, albedoLinear * eTint * 1.45, 0.72) * emission * 3.8 * emitterShimmer;
     }
 
-    vec3 specTint = isMaterial(matId, MAT_METALLIC) ? mix(vec3(1.0), albedoLinear * 1.35, 0.75) : vec3(1.0);
-
+    // Note: evaluatePBRSurface already tints metallic specular by albedoLinear via F0,
+    // and scales diffuse by energy conservation (1 - F) * (1 - metalness)
     vec3 totalDirect = albedoLinear * (directDiffuse + blk.diffuse + handDiffuse)
-                     + (directSpecular + blk.specular + handSpecular) * specTint
+                     + (directSpecular + blk.specular + handSpecular)
                      + emissiveRadiance;
 
     gl_FragData[0] = vec4(max(totalDirect, vec3(0.0)), blk.directionalOcclusion);

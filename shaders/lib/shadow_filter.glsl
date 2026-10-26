@@ -2,6 +2,7 @@
 #define SHADOW_FILTER_GLSL
 
 #include "/lib/common.glsl"
+#include "/lib/colors.glsl"
 #include "/lib/shadow_distort.glsl"
 
 // Optimized 12-tap Poisson Disk
@@ -47,7 +48,7 @@ vec3 sampleDirectionalShadow(
         return vec3(1.0);
     }
 
-    float depthBias = 0.00035;
+    float depthBias = 0.00032;
     float receiverZ = shadowScreen.z - depthBias;
 
     // Rotation matrix from spatial dither
@@ -56,7 +57,7 @@ vec3 sampleDirectionalShadow(
     float c = cos(angle);
     mat2 rot = mat2(c, -s, s, c);
 
-    float baseTexel = (1.25 * SHADOW_SOFTNESS) / float(SHADOW_MAP_RESOLUTION);
+    float baseTexel = (1.15 * SHADOW_SOFTNESS) / float(SHADOW_MAP_RESOLUTION);
 
     #ifdef SHADOW_CONTACT_HARDENING
     // 2-tap quick blocker distance check for contact hardening
@@ -71,11 +72,11 @@ vec3 sampleDirectionalShadow(
         }
     }
     float avgBlockerDist = (blockerCount > 0.0) ? (blockerSum / blockerCount) : 0.0;
-    // Scale penumbra radius: sharp near contact, wider soft penumbra further from caster
-    float penumbraScale = clamp(0.65 + avgBlockerDist * 85.0, 0.65, 2.6);
+    // Scale penumbra radius: razor-sharp near contact, wider soft penumbra further from caster
+    float penumbraScale = clamp(0.45 + avgBlockerDist * 95.0, 0.45, 2.4);
     float filterRadius = baseTexel * penumbraScale;
     #else
-    float filterRadius = baseTexel * 1.25;
+    float filterRadius = baseTexel * 1.10;
     #endif
 
     vec3 shadowAccum = vec3(0.0);
@@ -93,11 +94,12 @@ vec3 sampleDirectionalShadow(
             #ifdef SHADOW_COLORED_GLASS
             float allDepth = texture(shadowTex0, sampleUV).r;
             if (receiverZ > allDepth) {
-                // Blocked by translucent caster (stained glass / water)
+                // Light passed through translucent stained glass / water caster!
                 vec4 glassCol = texture(shadowColor0, sampleUV);
-                // Transmit tinted light proportional to glass color & opacity
-                vec3 tinted = mix(vec3(1.0), glassCol.rgb * 1.25, clamp(glassCol.a * 1.15, 0.0, 0.92));
-                shadowAccum += tinted * (1.0 - glassCol.a * 0.45);
+                vec3 glassLinear = toLinear(glassCol.rgb);
+                vec3 tintedFilter = getStainedGlassTransmission(glassLinear, glassCol.a);
+                // Transmit saturated colored light & colored shadow
+                shadowAccum += tintedFilter * (1.0 - glassCol.a * 0.32);
             } else {
                 shadowAccum += vec3(1.0);
             }
@@ -112,4 +114,3 @@ vec3 sampleDirectionalShadow(
 }
 
 #endif // SHADOW_FILTER_GLSL
-

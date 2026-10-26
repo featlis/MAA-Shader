@@ -44,13 +44,13 @@ void main() {
     vec4 texSample = texture(tex, vTexCoord);
     vec4 albedo = texSample * vColor;
 
-    if (albedo.a < 0.05) {
+    if (albedo.a < 0.04) {
         discard;
     }
 
     vec3 viewNormal = normalize(vViewNormal);
-    float smoothness = 0.85;
-    float f0 = 0.04;
+    float smoothness = 0.94;
+    float f0 = 0.06;
     float outAlpha = albedo.a;
     float matId = MAT_GLASS;
 
@@ -59,14 +59,24 @@ void main() {
         viewNormal = normalize(mat3(gbufferModelView) * waveWorldNormal);
 
         float waterLuma = getLuminance(albedo.rgb);
-        albedo.rgb = mix(vec3(0.05, 0.22, 0.30), albedo.rgb * vec3(0.25, 0.65, 0.80), 0.35) * (0.65 + waterLuma * 0.7);
-        outAlpha = 0.52;
+        albedo.rgb = mix(vec3(0.04, 0.20, 0.28), albedo.rgb * vec3(0.22, 0.62, 0.78), 0.35) * (0.65 + waterLuma * 0.7);
+        outAlpha = 0.50;
         smoothness = 0.96;
         f0 = 0.05;
         matId = MAT_WATER;
+    } else if (vBlockId == 10009) {
+        // Stained Glass & Panes: enrich chromatic saturation and set high-gloss optical properties
+        float luma = getLuminance(albedo.rgb);
+        albedo.rgb = clamp(mix(vec3(luma), albedo.rgb, 1.40), vec3(0.02), vec3(1.0));
+        outAlpha = clamp(albedo.a * 0.72, 0.28, 0.78);
+        smoothness = 0.96;
+        f0 = 0.06;
+        matId = MAT_STAINED_GLASS;
     } else {
-        smoothness = 0.90;
-        f0 = 0.05;
+        // Clear Glass, Ice, Packed Ice, Slime, Honey
+        smoothness = 0.94;
+        f0 = 0.06;
+        matId = MAT_GLASS;
     }
 
     gl_FragData[0] = vec4(albedo.rgb, outAlpha);

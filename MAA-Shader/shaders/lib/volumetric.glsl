@@ -41,25 +41,25 @@ vec3 applyVolumetricFogAndLightShafts(
 
     // Underwater volumetric scattering
     if (isEyeInWater == 1) {
-        vec3 waterFogColor = vec3(0.03, 0.18, 0.26) * (atm.directLight * 0.45 + vec3(0.12));
-        waterFogColor += localBlockLightColor * blockLight * 0.45 * COLORED_LIGHT_FOG_INFLUENCE;
-        float waterFogFactor = 1.0 - exp(-viewDist * 0.055 * FOG_DENSITY_MULTIPLIER);
-        return mix(sceneColor, waterFogColor, clamp(waterFogFactor, 0.0, 0.92));
+        vec3 waterFogColor = vec3(0.02, 0.16, 0.24) * (atm.directLight * 0.42 + vec3(0.10));
+        waterFogColor += localBlockLightColor * pow(blockLight, 2.0) * 0.35 * COLORED_LIGHT_FOG_INFLUENCE;
+        float waterFogFactor = 1.0 - exp(-viewDist * 0.048 * FOG_DENSITY_MULTIPLIER);
+        return mix(sceneColor, waterFogColor, clamp(waterFogFactor, 0.0, 0.90));
     }
 
     // Mie scattering phase toward active celestial light (Sun or Moon)
     float cosTheta = dot(viewDir, lightVecView);
-    float miePhase = henyeyGreenstein(cosTheta, 0.62);
+    float miePhase = henyeyGreenstein(cosTheta, 0.68);
 
     // Raymarch volumetric sun/moon shafts through distorted shadow map
     int steps = VOLUMETRIC_STEPS;
     float maxMarchDist = min(viewDist, min(SHADOW_DISTANCE * 0.85, 84.0));
     vec3 shaftAccum = vec3(0.0);
+    float coloredBeamWeight = 0.0;
 
-    if (skyLight > 0.02 || viewDist > 24.0) {
+    if ((skyLight > 0.05 || viewDist > 22.0) && viewDist > 6.0) {
         for (int i = 0; i < steps; i++) {
             float t = (float(i) + dither) / float(steps);
-            // Non-linear distribution concentrates samples closer to camera
             float marchDist = maxMarchDist * (t * t * 0.65 + t * 0.35);
             vec3 samplePlayerPos = (playerPos / max(viewDist, 0.001)) * marchDist;
 
@@ -81,7 +81,8 @@ vec3 applyVolumetricFogAndLightShafts(
                     if (sScreen.z > allD) {
                         // Colored volumetric beam through stained glass!
                         vec4 glass = texture(shadowColor0, sScreen.xy);
-                        stepLight = mix(vec3(1.0), glass.rgb * 1.35, clamp(glass.a, 0.0, 0.95));
+                        stepLight = getStainedGlassTransmission(toLinear(glass.rgb), glass.a) * 1.35;
+                        coloredBeamWeight += 1.0;
                     }
                     #endif
                     shaftAccum += stepLight;
@@ -89,43 +90,41 @@ vec3 applyVolumetricFogAndLightShafts(
             }
         }
         shaftAccum /= float(steps);
+        coloredBeamWeight /= float(steps);
     }
 
-    // Base atmospheric fog density (morning/sunset mist, rain fog, distance haze)
-    float baseDensity = 0.0022 * FOG_DENSITY_MULTIPLIER;
-    baseDensity *= (1.0 + atm.sunsetFactor * 1.45 + rainStrength * 2.8);
+    // Near-camera crystal-clear zone: zero fog haze within 18m (4m in rain)
+    float clearZoneMeters = mix(18.0, 4.0, rainStrength);
+    float effectiveFogDist = max(viewDist - clearZoneMeters, 0.0);
 
-    // Height attenuation (thicker mist in valleys / near water level)
-    float heightFactor = exp(- clamp(playerPos.y * 0.015, -0.5, 2.0));
-    float fogOpticalDepth = viewDist * baseDensity * heightFactor;
-    float fogFactor = clamp(1.0 - exp(-fogOpticalDepth), 0.0, 0.88);
+    // Base atmospheric fog density (distance haze, sunset mist, rain fog)
+    float baseDensity = 0.0013 * FOG_DENSITY_MULTIPLIER;
+    baseDensity *= (1.0 + atm.sunsetFactor * 1.25 + rainStrength * 2.6);
+
+    float heightFactor = exp(-clamp(playerPos.y * 0.015, -0.4, 2.0));
+    float fogOpticalDepth = effectiveFogDist * baseDensity * heightFactor;
+    float fogFactor = clamp(1.0 - exp(-fogOpticalDepth), 0.0, 0.82);
 
     // Sky/Sun atmospheric fog color
-    vec3 skyFogColor = mix(atm.skyHorizon, atm.directLight * 0.65, clamp(miePhase * 0.85, 0.0, 0.75));
+    vec3 skyFogColor = mix(atm.skyHorizon, atm.directLight * 0.62, clamp(miePhase * 0.75, 0.0, 0.70));
 
-    // Local Colored Blocklight Fog Influence
-    // Both placed blocklights and handheld dynamic light tint nearby fog!
-    float localLightFogWeight = pow(blockLight, 1.6) * COLORED_LIGHT_FOG_INFLUENCE;
-    vec3 blockFogContribution = localBlockLightColor * localLightFogWeight * 0.55;
+    // Local Colored Blocklight Fog Influence (only tints actual distance fog & close emitter core)
+    float localLightFogWeight = pow(blockLight, 2.4) * COLORED_LIGHT_FOG_INFLUENCE;
+    vec3 blockFogContribution = localBlockLightColor * localLightFogWeight * 0.38;
 
-    // Handheld light volumetric mist halo near camera
-    float handMist = smoothHeldIntensity * HANDLIGHT_INTENSITY * exp(-viewDist * 0.12) * 0.14 * COLORED_LIGHT_FOG_INFLUENCE;
-    vec3 handFogContribution = heldLightColor * handMist;
-
-    // Combine outdoor sky fog (scaled by skyLight) and indoor/cave colored light fog
-    float outdoorWeight = clamp(skyLight * skyLight + smoothstep(32.0, 96.0, viewDist), 0.05, 1.0);
+    float outdoorWeight = clamp(skyLight * skyLight + smoothstep(36.0, 110.0, viewDist), 0.02, 1.0);
     vec3 combinedFogColor = skyFogColor * outdoorWeight + blockFogContribution;
 
-    // Volumetric light shafts (God rays)
-    float shaftIntensity = (0.14 + atm.sunsetFactor * 0.22 + rainStrength * 0.10) * FOG_DENSITY_MULTIPLIER;
-    float distFactor = clamp(maxMarchDist / 56.0, 0.0, 1.0);
-    vec3 godRays = atm.directLight * shaftAccum * (0.35 + miePhase * 1.45) * shaftIntensity * distFactor;
+    // Volumetric light shafts (God rays): gated by distance and forward Mie phase so nearby blocks stay crystal clear
+    float shaftDistGate = smoothstep(8.0, 48.0, viewDist);
+    float stainedGlassGate = mix(shaftDistGate, smoothstep(2.0, 16.0, viewDist), clamp(coloredBeamWeight * 2.0, 0.0, 1.0));
+    float shaftIntensity = (0.065 + atm.sunsetFactor * 0.14 + rainStrength * 0.06) * FOG_DENSITY_MULTIPLIER;
+    vec3 godRays = atm.directLight * shaftAccum * (0.15 + miePhase * 1.55) * shaftIntensity * stainedGlassGate;
 
     vec3 outColor = mix(sceneColor, combinedFogColor, fogFactor);
-    outColor += godRays + handFogContribution;
+    outColor += godRays;
 
     return outColor;
 }
 
 #endif // VOLUMETRIC_GLSL
-

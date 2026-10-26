@@ -4,11 +4,11 @@
 #include "/lib/common.glsl"
 
 // ============================================================================
-// Cinematic-Realistic ACES Tone Mapping with Non-Crushing Shadow Toe Lift
+// Cinematic-Realistic ACES Tone Mapping (Crisp Contrast, Zero Milky Haze)
 // ============================================================================
 vec3 cinematicACESTonemap(vec3 color) {
-    // Lift very deep darks slightly so caves & shadows never crush to pure 0.0 black
-    vec3 lifted = color + vec3(SHADOW_TOE_LIFT) * (1.0 / (1.0 + color * 8.0));
+    // Micro shadow-toe lift (0.002 default) prevents crushed 0.0 caves while keeping blacks rich and crisp
+    vec3 lifted = max(color, vec3(0.0)) + vec3(SHADOW_TOE_LIFT) * (1.0 / (1.0 + color * 24.0));
 
     // ACES input matrix (sRGB to AP1-like space)
     const mat3 ACESInputMat = mat3(
@@ -26,20 +26,19 @@ vec3 cinematicACESTonemap(vec3 color) {
 
     vec3 v = ACESInputMat * lifted;
 
-    // RRT and ODT fit with modified toe to preserve shadow detail
-    vec3 a = v * (v + 0.0285786) - 0.000040537;
-    vec3 b = v * (0.983729 * v + 0.4329510) + 0.218081;
-    vec3 c = ACESOutputMat * (a / b);
+    // Stephen Hill RRT and ODT fit for crisp blacks and natural highlight roll-off
+    vec3 a = v * (v + 0.0245786) - 0.000090537;
+    vec3 b = v * (0.983729 * v + 0.4329510) + 0.238081;
+    vec3 c = ACESOutputMat * (a / max(b, vec3(1e-5)));
 
     return clamp(c, 0.0, 1.0);
 }
 
-// Cinematic contrast & vibrance grading (preserves skin/wood tones while enriching sky/lights)
+// Cinematic contrast & vibrance grading (crisp shadows, vivid light colors)
 vec3 applyCinematicGrading(vec3 srgbColor) {
-    // Soft S-curve contrast centered around mid-grey (0.42)
-    vec3 contrasted = clamp((srgbColor - 0.42) * CINEMATIC_CONTRAST + 0.42, 0.0, 1.0);
-    // Blend so shadow toe stays open
-    srgbColor = mix(srgbColor, contrasted, smoothstep(0.05, 0.35, getLuminance(srgbColor)));
+    // Crisp S-curve contrast centered around mid-grey (0.44)
+    vec3 contrasted = clamp((srgbColor - 0.44) * CINEMATIC_CONTRAST + 0.44, 0.0, 1.0);
+    srgbColor = mix(srgbColor, contrasted, smoothstep(0.01, 0.18, getLuminance(srgbColor)));
 
     // Vibrance + Saturation
     float luma = getLuminance(srgbColor);
@@ -47,8 +46,7 @@ vec3 applyCinematicGrading(vec3 srgbColor) {
     float minChan = min(srgbColor.r, min(srgbColor.g, srgbColor.b));
     float sat = maxChan - minChan;
 
-    // Boost less-saturated colors slightly more than already-saturated colors
-    float vibranceFactor = mix(CINEMATIC_SATURATION, 1.0 + (CINEMATIC_SATURATION - 1.0) * 0.5, sat);
+    float vibranceFactor = mix(CINEMATIC_SATURATION, 1.0 + (CINEMATIC_SATURATION - 1.0) * 0.55, sat);
     srgbColor = mix(vec3(luma), srgbColor, vibranceFactor);
 
     return clamp(srgbColor, 0.0, 1.0);
@@ -107,16 +105,15 @@ vec3 applyFXAAAndCAS(sampler2D tex, vec2 uv, vec2 texelSize) {
         }
     }
 
-    // Subtle Contrast-Adaptive Sharpening (CAS) on non-edge interior details
+    // Contrast-Adaptive Sharpening (CAS) for crisp block & light edges
     if (CAS_SHARPENING > 0.001) {
         vec3 avgNeighbor = 0.25 * (rgbNW + rgbNE + rgbSW + rgbSE);
         vec3 detail = rgbM - avgNeighbor;
-        float edgeMask = clamp(1.0 - lumaRange * 2.5, 0.0, 1.0);
-        result = clamp(result + detail * (CAS_SHARPENING * 0.45 * edgeMask), 0.0, 1.0);
+        float edgeMask = clamp(1.0 - lumaRange * 2.2, 0.0, 1.0);
+        result = clamp(result + detail * (CAS_SHARPENING * 0.52 * edgeMask), 0.0, 1.0);
     }
 
     return result;
 }
 
 #endif // TONEMAP_GLSL
-

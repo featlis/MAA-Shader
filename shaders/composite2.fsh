@@ -70,6 +70,8 @@ void main() {
     }
 
     vec3 albedoLinear = toLinear(c0.rgb);
+    float smoothness  = c2.r;
+    float f0          = c2.g;
     float matId       = c2.a;
     vec3 viewNormal   = decodeNormal(c1.rg);
     float blockLight  = c1.b;
@@ -80,42 +82,44 @@ void main() {
     vec2 texelSize   = vec2(1.0 / max(viewWidth, 1.0), 1.0 / max(viewHeight, 1.0));
 
     // 1. Cross-Bilateral Denoised SSGI Indirect Bounce & Ambient Occlusion
+    // Uses roughness-aware filter radius (soft diffuse blur on stone, crisp on glossy blocks)
     vec4 ssgiFiltered = sampleBilateralSSGI(
-        vTexCoord, viewNormal, linDepth, texelSize,
+        vTexCoord, viewNormal, linDepth, smoothness, texelSize,
         colortex4, colortex1, depthtex0, near, far
     );
     vec3 indirectBounce = ssgiFiltered.rgb;
     float ssao = ssgiFiltered.a;
 
-    // 2. Non-Crushing Hemispherical Skylight + Ground Bounce + Cave Minimum Floor
+    // 2. Hemispherical Skylight + Ground Bounce + Crisp Cave Floor
     float hemiUp = worldNormal.y * 0.5 + 0.5;
     vec3 skyHemisphere = mix(
         atm.groundBounce * GROUND_BOUNCE_STRENGTH,
-        atm.skyZenith * 0.62 + atm.skyHorizon * 0.42,
+        atm.skyZenith * 0.58 + atm.skyHorizon * 0.38,
         hemiUp
     ) * SKY_AMBIENT_INTENSITY;
 
-    float outdoorSkyFactor = pow(skyLight, 1.45);
+    float outdoorSkyFactor = pow(skyLight, 1.55);
     vec3 outdoorAmbient = skyHemisphere * outdoorSkyFactor;
 
-    float directionalForm = 0.72 + 0.28 * hemiUp;
-    vec3 caveFloorAmbient = vec3(0.76, 0.85, 1.00) * MIN_CAVE_BRIGHTNESS * directionalForm;
+    float directionalForm = 0.68 + 0.32 * hemiUp;
+    vec3 caveFloorAmbient = vec3(0.74, 0.84, 1.00) * MIN_CAVE_BRIGHTNESS * directionalForm;
     if (nightVision > 0.01) {
-        caveFloorAmbient += vec3(0.22, 0.28, 0.24) * nightVision;
+        caveFloorAmbient += vec3(0.20, 0.26, 0.22) * nightVision;
     }
 
     vec3 totalAmbient = max(outdoorAmbient, caveFloorAmbient) * ssao;
 
-    // 3. Screen-Space Reflections (SSR)
+    // 3. Screen-Space Reflections (SSR) with Energy Conservation
     vec4 ssr = texture(colortex6, vTexCoord);
+    float kD_env = clamp(1.0 - ssr.a * 0.55, 0.25, 1.0);
 
-    // Combine Direct + Indirect SSGI Bounce + Hemispheric Ambient + SSR
-    vec3 surfaceColor = directData.rgb * mix(1.0, ssao, 0.45)
-                      + albedoLinear * (totalAmbient + indirectBounce * ssao)
+    // Combine Direct + Material-Weighted Indirect SSGI Bounce + Hemispheric Ambient + SSR
+    vec3 surfaceColor = directData.rgb * mix(1.0, ssao, 0.40)
+                      + albedoLinear * (totalAmbient + indirectBounce * ssao) * kD_env
                       + ssr.rgb;
 
     // 4. Local Blocklight Color for Colored Fog Tinting
-    vec3 localFogLightColor = getEmissiveColorFromMat(matId, blockLight);
+    vec3 localFogLightColor = getEmissiveColorFromMatAndTex(matId, albedoLinear, blockLight);
     if (dot(indirectBounce, indirectBounce) > 0.001) {
         vec3 bounceChroma = indirectBounce / max(getLuminance(indirectBounce), 0.01);
         localFogLightColor = mix(localFogLightColor, clamp(bounceChroma, vec3(0.1), vec3(1.5)), 0.55);
