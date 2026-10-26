@@ -12,10 +12,7 @@ in vec4 vColor;
 in vec3 vViewNormal;
 flat in int vBlockId;
 
-/* RENDERTARGETS: 0,1,2 */
-layout(location = 0) out vec4 outColor0; // rgb: Albedo, a: Material ID
-layout(location = 1) out vec4 outColor1; // rg: Encoded View Normal, b: BlockLight, a: SkyLight
-layout(location = 2) out vec4 outColor2; // r: Smoothness, g: F0, b: Emission, a: Vanilla AO
+/* DRAWBUFFERS:012 */
 
 void main() {
     vec4 texSample = texture(tex, vTexCoord);
@@ -62,7 +59,6 @@ void main() {
         smoothness = clamp(0.68 + luma * 0.24, 0.65, 0.92);
         f0 = 0.65;
     } else if (vLmCoord.x > 0.965 && luma > 0.65) {
-        // Fallback auto-classification for unmapped / modded light sources at light level 15
         if (albedo.b > albedo.r * 1.35) {
             matId = MAT_EMISSIVE_SOUL;
         } else if (albedo.r > albedo.g * 2.1 && albedo.r > albedo.b * 2.1) {
@@ -78,15 +74,10 @@ void main() {
     if (outdoorWet > 0.01 && !isEmissiveMaterial(matId)) {
         smoothness = mix(smoothness, 0.88, outdoorWet * WETNESS_REFLECTION);
         f0 = mix(f0, 0.06, outdoorWet);
-        // Slightly darken wet porous surfaces realistically
         albedo.rgb *= mix(1.0, 0.82, outdoorWet * (1.0 - f0));
     }
 
-    // Vanilla ambient occlusion is stored in vColor.a (or brightness of vColor)
-    float vanillaAO = clamp(min(vColor.a, max(vColor.r, max(vColor.g, vColor.b))), 0.35, 1.0);
-
-    outColor0 = vec4(albedo.rgb, matId);
-    outColor1 = vec4(encodeNormal(viewNormal), vLmCoord.x, vLmCoord.y);
-    outColor2 = vec4(smoothness, f0, emission, vanillaAO);
+    gl_FragData[0] = vec4(albedo.rgb, 1.0);
+    gl_FragData[1] = vec4(encodeNormal(viewNormal), vLmCoord.x, vLmCoord.y);
+    gl_FragData[2] = vec4(smoothness, f0, emission, matId);
 }
-

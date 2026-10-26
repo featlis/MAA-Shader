@@ -36,8 +36,7 @@ uniform float nightVision;
 
 in vec2 vTexCoord;
 
-/* RENDERTARGETS: 3 */
-layout(location = 0) out vec4 outFinalHDR;
+/* DRAWBUFFERS:7 */
 
 void main() {
     vec4 c0 = texture(colortex0, vTexCoord);
@@ -66,16 +65,15 @@ void main() {
             rainStrength, isEyeInWater, dither, atm,
             shadowtex0, shadowtex1, shadowcolor0, shadowModelView, shadowProjection
         );
-        outFinalHDR = vec4(skyVol, 1.0);
+        gl_FragData[0] = vec4(skyVol, 1.0);
         return;
     }
 
     vec3 albedoLinear = toLinear(c0.rgb);
-    float matId       = c0.a;
+    float matId       = c2.a;
     vec3 viewNormal   = decodeNormal(c1.rg);
     float blockLight  = c1.b;
     float skyLight    = c1.a;
-    float vanillaAO   = c2.a;
 
     vec3 worldNormal = normalize(mat3(gbufferModelViewInverse) * viewNormal);
     float linDepth   = linearizeDepth(depth, near, far);
@@ -88,7 +86,6 @@ void main() {
     );
     vec3 indirectBounce = ssgiFiltered.rgb;
     float ssao = ssgiFiltered.a;
-    float combinedAO = ssao * vanillaAO;
 
     // 2. Non-Crushing Hemispherical Skylight + Ground Bounce + Cave Minimum Floor
     float hemiUp = worldNormal.y * 0.5 + 0.5;
@@ -101,25 +98,23 @@ void main() {
     float outdoorSkyFactor = pow(skyLight, 1.45);
     vec3 outdoorAmbient = skyHemisphere * outdoorSkyFactor;
 
-    // Atmospheric minimum cave ambient (prevents pitch-black shadows while preserving 3D form)
     float directionalForm = 0.72 + 0.28 * hemiUp;
     vec3 caveFloorAmbient = vec3(0.76, 0.85, 1.00) * MIN_CAVE_BRIGHTNESS * directionalForm;
     if (nightVision > 0.01) {
         caveFloorAmbient += vec3(0.22, 0.28, 0.24) * nightVision;
     }
 
-    vec3 totalAmbient = max(outdoorAmbient, caveFloorAmbient) * combinedAO;
+    vec3 totalAmbient = max(outdoorAmbient, caveFloorAmbient) * ssao;
 
     // 3. Screen-Space Reflections (SSR)
     vec4 ssr = texture(colortex6, vTexCoord);
 
     // Combine Direct + Indirect SSGI Bounce + Hemispheric Ambient + SSR
     vec3 surfaceColor = directData.rgb * mix(1.0, ssao, 0.45)
-                      + albedoLinear * (totalAmbient + indirectBounce * combinedAO)
+                      + albedoLinear * (totalAmbient + indirectBounce * ssao)
                       + ssr.rgb;
 
     // 4. Local Blocklight Color for Colored Fog Tinting
-    // Estimate local light tint from SSGI bounce + blocklight temperature
     vec3 localFogLightColor = getEmissiveColorFromMat(matId, blockLight);
     if (dot(indirectBounce, indirectBounce) > 0.001) {
         vec3 bounceChroma = indirectBounce / max(getLuminance(indirectBounce), 0.01);
@@ -135,6 +130,5 @@ void main() {
         shadowtex0, shadowtex1, shadowcolor0, shadowModelView, shadowProjection
     );
 
-    outFinalHDR = vec4(max(finalHDR, vec3(0.0)), 1.0);
+    gl_FragData[0] = vec4(max(finalHDR, vec3(0.0)), 1.0);
 }
-

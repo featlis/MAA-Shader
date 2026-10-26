@@ -7,14 +7,12 @@ uniform sampler2D tex;
 in vec2 vTexCoord;
 in vec4 vColor;
 
-/* RENDERTARGETS: 0 */
-layout(location = 0) out vec4 outShadowColor0;
+/* DRAWBUFFERS:0 */
 
 void main() {
     vec4 albedo = texture(tex, vTexCoord) * vColor;
     if (albedo.a < 0.1) {
         discard;
     }
-    outShadowColor0 = albedo;
+    gl_FragData[0] = albedo;
 }
-

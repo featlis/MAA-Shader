@@ -103,7 +103,7 @@ vec3 applyVolumetricFogAndLightShafts(
     // Sky/Sun atmospheric fog color
     vec3 skyFogColor = mix(atm.skyHorizon, atm.directLight * 0.65, clamp(miePhase * 0.85, 0.0, 0.75));
 
-    // Local Colored Blocklight Fog Influence ("光源の色によって霧に影響")
+    // Local Colored Blocklight Fog Influence
     // Both placed blocklights and handheld dynamic light tint nearby fog!
     float localLightFogWeight = pow(blockLight, 1.6) * COLORED_LIGHT_FOG_INFLUENCE;
     vec3 blockFogContribution = localBlockLightColor * localLightFogWeight * 0.55;

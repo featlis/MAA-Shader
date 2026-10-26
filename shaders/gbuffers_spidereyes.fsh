@@ -7,10 +7,7 @@ uniform sampler2D tex;
 in vec2 vTexCoord;
 in vec4 vColor;
 
-/* RENDERTARGETS: 0,1,2 */
-layout(location = 0) out vec4 outColor0;
-layout(location = 1) out vec4 outColor1;
-layout(location = 2) out vec4 outColor2;
+/* DRAWBUFFERS:012 */
 
 void main() {
     vec4 albedo = texture(tex, vTexCoord) * vColor;
@@ -18,8 +15,7 @@ void main() {
         discard;
     }
 
-    outColor0 = vec4(albedo.rgb * 1.6, MAT_EMISSIVE_RED);
-    outColor1 = vec4(0.5, 0.5, 1.0, 0.5);
-    outColor2 = vec4(0.20, 0.04, 0.90, 1.0);
+    gl_FragData[0] = vec4(albedo.rgb * 1.6, albedo.a);
+    gl_FragData[1] = vec4(0.5, 0.5, 1.0, 0.5);
+    gl_FragData[2] = vec4(0.20, 0.04, 0.90, MAT_EMISSIVE_RED);
 }
-

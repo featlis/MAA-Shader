@@ -1,0 +1,114 @@
+# ============================================================================
+# MAA-Shader 日本語言語ファイル (ja_JP.lang)
+# ============================================================================
+
+# Profiles
+profile.LOW=軽量 (Low - 最高FPS)
+profile.MEDIUM=標準 (Medium - バランス推奨)
+profile.HIGH=高品質 (High)
+profile.ULTRA=最高品質 (Ultra)
+
+# Screens
+screen.SHADOW_SCREEN=影・シャドウ設定
+screen.LIGHTING_SCREEN=光源・指向性・暗所設定
+screen.HANDLIGHT_SCREEN=手持ち光源 (ダイナミックライト)
+screen.GI_REFLECTION_SCREEN=光の反射・間接光 (SSGI / SSR)
+screen.ATMOSPHERE_SCREEN=大気・色付き霧・揺れ設定
+screen.POST_SCREEN=色調・シネマティック補正
+
+# Shadow Options
+option.SHADOW_MAP_RESOLUTION=シャドウ解像度
+option.SHADOW_MAP_RESOLUTION.comment=太陽・月の影マップ解像度。歪み補正により2048でも高精細かつ軽量に動作します。
+option.SHADOW_DISTANCE=影の描画距離
+option.SHADOW_DISTANCE.comment=太陽・月の影を描画する最大距離（ブロック数）。
+option.SHADOW_PCF_SAMPLES=影の滑らかさサンプル数
+option.SHADOW_PCF_SAMPLES.comment=影の境界を滑らかにするサンプル数。少ないほど動作が軽くなります。
+option.SHADOW_SOFTNESS=影のボケ具合 (ペナンブラ)
+option.SHADOW_SOFTNESS.comment=遮蔽物から離れた影の柔らかさを調整します。
+option.SHADOW_DISTORTION=近距離シャドウ集中度
+option.SHADOW_DISTORTION.comment=プレイヤー付近の影の解像度を高める歪み率です。
+option.SHADOW_COLORED_GLASS=色付きガラスの透過影
+option.SHADOW_COLORED_GLASS.comment=ステンドグラスを通過する光にガラスの色を反映します。
+option.SHADOW_CONTACT_HARDENING=距離に応じた影の変化 (PCSS)
+option.SHADOW_CONTACT_HARDENING.comment=遮蔽物に近い根元の影をくっきりさせ、離れるほど柔らかい影に変化させます。
+
+# Lighting & Tube Occlusion Options
+option.DIRECTIONAL_BLOCKLIGHT=ブロック光源の3D指向性・遮蔽
+option.DIRECTIONAL_BLOCKLIGHT.comment=筒状に囲まれた光源が開口部方向に広がり、壁面側には遮蔽される物理指向性を有効化します。
+option.TUBE_OCCLUSION_STRENGTH=筒・壁による遮光強度
+option.TUBE_OCCLUSION_STRENGTH.comment=光源をブロックで囲んだ際の遮蔽と指向性の強さを調整します。
+option.BLOCKLIGHT_OCCLUSION_STEPS=遮蔽レイのステップ数
+option.BLOCKLIGHT_OCCLUSION_STEPS.comment=光源と表面の間の壁判定ステップ数。4で十分な精度と軽さを両立します。
+option.BLOCKLIGHT_INTENSITY=設置光源の明るさ
+option.BLOCKLIGHT_INTENSITY.comment=松明・ランタン・グロウストーン等の光量を調整します。
+option.BLOCKLIGHT_DISTANCE_FALLOFF=光源の距離減衰カーブ
+option.BLOCKLIGHT_DISTANCE_FALLOFF.comment=光源からの距離に応じた光の減衰率を調整します。
+option.MIN_CAVE_BRIGHTNESS=暗所の最低視認輝度 (黒潰れ防止)
+option.MIN_CAVE_BRIGHTNESS.comment=従来の影MODのように洞窟や日陰が真っ暗になりすぎないよう、最低限の環境光を保ちます。
+option.SKY_AMBIENT_INTENSITY=空からの環境光の強さ
+option.SKY_AMBIENT_INTENSITY.comment=日陰部分を照らす空のドーム環境光の強さです。
+option.GROUND_BOUNCE_STRENGTH=地面からの照り返し光
+option.GROUND_BOUNCE_STRENGTH.comment=地面から天井や壁の下部へ跳ね返る環境光の強さです。
+
+# Handheld Light Options
+option.HANDLIGHT_MODE=手持ち光源の照射タイプ
+option.HANDLIGHT_MODE.comment=手に持った光源の光の広がり方を選択します。
+value.HANDLIGHT_MODE.0=ハイブリッド (全方位 + 前方スポット)
+value.HANDLIGHT_MODE.1=ポイントライト (松明風360度全方位)
+value.HANDLIGHT_MODE.2=スポットライト (懐中電灯風前方ビーム)
+option.HANDLIGHT_INTENSITY=手持ち光源の明るさ
+option.HANDLIGHT_INTENSITY.comment=手に持っている光源の明るさを調整します。
+option.HANDLIGHT_RANGE=手持ち光源の到達距離
+option.HANDLIGHT_RANGE.comment=手持ち光源の光が届く最大距離（ブロック数）。
+option.HANDLIGHT_SMOOTH_SPEED=手持ち光源の滑らか追従速度
+option.HANDLIGHT_SMOOTH_SPEED.comment=光源を持ち替えた際や移動時の光のフェード変化速度。低いほど滑らかに変化します。
+
+# GI & Reflection Options
+option.ENABLE_SSGI=間接光の反射 (SSGI カラーブリーディング)
+option.ENABLE_SSGI.comment=光が当たった壁や色付きブロックから周囲へ色付きの反射光（バウンス光）を広げます。
+option.SSGI_SAMPLES=間接光レイ数
+option.SSGI_SAMPLES.comment=間接光バウンスのサンプル数。4が軽量かつ高品質で推奨です。
+option.SSGI_STEPS=間接光トレースステップ
+option.SSGI_STEPS.comment=間接光レイ1本あたりの探索ステップ数。
+option.SSGI_INTENSITY=間接光バウンスの強さ
+option.SSGI_INTENSITY.comment=壁や床からの反射光（間接照明）の強さを調整します。
+option.ENABLE_SSR=水面・滑面の鏡面反射 (SSR)
+option.ENABLE_SSR.comment=水面や金属、雨天時の濡れたブロックに周囲の景色と光源の色を反射させます。
+option.SSR_STEPS=鏡面反射の精度ステップ
+option.SSR_STEPS.comment=スクリーンスペース反射のレイマーチ回数。
+option.SPECULAR_STRENGTH=光源ハイライト反射の強さ
+option.SPECULAR_STRENGTH.comment=ブロック表面が太陽や色付き光源を反射するスペキュラ強度です。
+option.WETNESS_REFLECTION=雨天時の路面反射
+option.WETNESS_REFLECTION.comment=雨が降った際に屋外のブロックが濡れて光を反射する強さです。
+
+# Atmosphere & Fog Options
+option.ENABLE_VOLUMETRIC_FOG=立体霧・光の筋 (ゴッドレイ)
+option.ENABLE_VOLUMETRIC_FOG.comment=木漏れ日の光の筋や、光源の色に染まる大気・洞窟フォグを有効化します。
+option.VOLUMETRIC_STEPS=立体霧のサンプル数
+option.VOLUMETRIC_STEPS.comment=ディザリングにより6ステップでも滑らかかつ非常に軽量に動作します。
+option.FOG_DENSITY_MULTIPLIER=霧の濃さ
+option.FOG_DENSITY_MULTIPLIER.comment=空気遠近感の霧および光の筋の濃さを調整します。
+option.COLORED_LIGHT_FOG_INFLUENCE=光源色による霧への影響度
+option.COLORED_LIGHT_FOG_INFLUENCE.comment=松明の暖色、魂のランタンの青緑、レッドストーンの赤色などが周囲の霧を染める強さです。
+option.ENABLE_WAVING_FOLIAGE=葉・草花の風揺れ
+option.ENABLE_WAVING_FOLIAGE.comment=木の葉や草花が風で自然に揺れるアニメーションを有効化します。
+option.WAVING_SPEED=風揺れの速度
+option.WAVING_SPEED.comment=草木が揺れるスピードを調整します。
+option.WATER_WAVE_STRENGTH=水面の波の高さ
+option.WATER_WAVE_STRENGTH.comment=水面の波の法線および揺れの強さを調整します。
+
+# Post Processing Options
+option.ENABLE_AUTO_EXPOSURE=自動露出 (暗所への目の順応)
+option.ENABLE_AUTO_EXPOSURE.comment=暗い洞窟に入ると自動的に目が慣れて見やすくなり、明るい屋外では眩しさを抑えます。
+option.AUTO_EXPOSURE_SPEED=自動露出の順応速度
+option.AUTO_EXPOSURE_SPEED.comment=明暗差に対して目が順応するスピードを調整します。
+option.ENABLE_FXAA=アンチエイリアス (FXAA)
+option.ENABLE_FXAA.comment=ブロックの輪郭のギザギザを滑らかにします。
+option.CAS_SHARPENING=テクスチャ鮮鋭化 (CAS)
+option.CAS_SHARPENING.comment=輪郭を保ちながらテクスチャのディテールをくっきりさせます。
+option.CINEMATIC_CONTRAST=シネマティックコントラスト
+option.CINEMATIC_CONTRAST.comment=映画のような深みのある明暗差を調整します。
+option.CINEMATIC_SATURATION=彩度・鮮やかさ
+option.CINEMATIC_SATURATION.comment=画面全体の色彩の豊かさを調整します。
+option.SHADOW_TOE_LIFT=暗部階調の持ち上げ (黒潰れ抑制)
+option.SHADOW_TOE_LIFT.comment=ACESトーンマッピングの暗部を持ち上げ、暗い場所でもディテールを潰さず表示します。

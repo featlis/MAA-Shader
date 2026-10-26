@@ -1,0 +1,114 @@
+# ============================================================================
+# MAA-Shader English Language File (en_US.lang)
+# ============================================================================
+
+# Profiles
+profile.LOW=Low (Fastest FPS)
+profile.MEDIUM=Medium (Balanced - Recommended)
+profile.HIGH=High Quality
+profile.ULTRA=Ultra Quality
+
+# Screens
+screen.SHADOW_SCREEN=Shadow Settings
+screen.LIGHTING_SCREEN=Lighting & Tube Occlusion
+screen.HANDLIGHT_SCREEN=Handheld Dynamic Light
+screen.GI_REFLECTION_SCREEN=Reflections & Indirect Bounce (GI)
+screen.ATMOSPHERE_SCREEN=Volumetric Fog & Waves
+screen.POST_SCREEN=Cinematic Tone & Post-Process
+
+# Shadow Options
+option.SHADOW_MAP_RESOLUTION=Shadow Map Resolution
+option.SHADOW_MAP_RESOLUTION.comment=Resolution of Sun/Moon shadow map. Distortion keeps 2048 sharp and lightweight.
+option.SHADOW_DISTANCE=Shadow Distance
+option.SHADOW_DISTANCE.comment=Maximum distance in blocks for directional shadows.
+option.SHADOW_PCF_SAMPLES=Shadow Filter Samples
+option.SHADOW_PCF_SAMPLES.comment=Poisson disk sample count for soft shadow edges.
+option.SHADOW_SOFTNESS=Shadow Penumbra Softness
+option.SHADOW_SOFTNESS.comment=Controls how soft shadows become away from the caster.
+option.SHADOW_DISTORTION=Near-Player Shadow Focus
+option.SHADOW_DISTORTION.comment=Concentrates shadow map texels around the player for crisp contact shadows.
+option.SHADOW_COLORED_GLASS=Colored Stained Glass Shadows
+option.SHADOW_COLORED_GLASS.comment=Tints sunlight passing through translucent stained glass blocks.
+option.SHADOW_CONTACT_HARDENING=Contact Hardening Shadows (PCSS)
+option.SHADOW_CONTACT_HARDENING.comment=Sharp shadows near the contact point, softer shadows farther from the blocker.
+
+# Lighting & Tube Occlusion Options
+option.DIRECTIONAL_BLOCKLIGHT=3D Directional Blocklight & Occlusion
+option.DIRECTIONAL_BLOCKLIGHT.comment=Lights enclosed in a tube project outward along open faces and are occluded by walls.
+option.TUBE_OCCLUSION_STRENGTH=Tube & Wall Occlusion Strength
+option.TUBE_OCCLUSION_STRENGTH.comment=Controls how strongly walls block and direct enclosed light sources.
+option.BLOCKLIGHT_OCCLUSION_STEPS=Occlusion Ray Steps
+option.BLOCKLIGHT_OCCLUSION_STEPS.comment=Screen-space ray steps for wall occlusion detection.
+option.BLOCKLIGHT_INTENSITY=Blocklight Brightness
+option.BLOCKLIGHT_INTENSITY.comment=Brightness multiplier for placed torches, lanterns, and glowstone.
+option.BLOCKLIGHT_DISTANCE_FALLOFF=Light Distance Falloff
+option.BLOCKLIGHT_DISTANCE_FALLOFF.comment=Controls physical attenuation rate of blocklight over distance.
+option.MIN_CAVE_BRIGHTNESS=Minimum Cave Brightness
+option.MIN_CAVE_BRIGHTNESS.comment=Prevents pitch-black shadows in caves and unlit areas.
+option.SKY_AMBIENT_INTENSITY=Sky Ambient Intensity
+option.SKY_AMBIENT_INTENSITY.comment=Strength of hemispherical sky ambient illumination in outdoor shadows.
+option.GROUND_BOUNCE_STRENGTH=Ground Bounce Illumination
+option.GROUND_BOUNCE_STRENGTH.comment=Warm bounced light reflected upward from the ground onto overhangs.
+
+# Handheld Light Options
+option.HANDLIGHT_MODE=Handheld Light Mode
+option.HANDLIGHT_MODE.comment=Selects light emission pattern for held torches/lanterns.
+value.HANDLIGHT_MODE.0=Hybrid (Point + Forward Spotlight)
+value.HANDLIGHT_MODE.1=Point Light (360 Omni-Directional)
+value.HANDLIGHT_MODE.2=Spotlight (Flashlight Cone)
+option.HANDLIGHT_INTENSITY=Handheld Light Intensity
+option.HANDLIGHT_INTENSITY.comment=Brightness of dynamic handheld light sources.
+option.HANDLIGHT_RANGE=Handheld Light Range
+option.HANDLIGHT_RANGE.comment=Maximum reach distance of handheld dynamic lights in blocks.
+option.HANDLIGHT_SMOOTH_SPEED=Handheld Smooth Transition Speed
+option.HANDLIGHT_SMOOTH_SPEED.comment=Controls temporal smoothing speed when equipping or moving with lights.
+
+# GI & Reflection Options
+option.ENABLE_SSGI=Indirect Light Bounce (SSGI)
+option.ENABLE_SSGI.comment=Simulates colored light bouncing off walls and floors onto nearby geometry.
+option.SSGI_SAMPLES=Indirect Bounce Rays
+option.SSGI_SAMPLES.comment=Number of hemisphere rays per pixel for indirect bounce.
+option.SSGI_STEPS=Indirect Ray Steps
+option.SSGI_STEPS.comment=Steps per indirect ray march.
+option.SSGI_INTENSITY=Indirect Bounce Strength
+option.SSGI_INTENSITY.comment=Intensity of bounced indirect light and color bleeding.
+option.ENABLE_SSR=Screen-Space Reflections (SSR)
+option.ENABLE_SSR.comment=Reflections on water, polished blocks, and wet terrain.
+option.SSR_STEPS=Reflection Ray Steps
+option.SSR_STEPS.comment=Number of raymarch steps for screen-space reflections.
+option.SPECULAR_STRENGTH=Colored Specular Highlight Strength
+option.SPECULAR_STRENGTH.comment=Intensity of colored light specular reflections on surfaces.
+option.WETNESS_REFLECTION=Rain Puddle Reflections
+option.WETNESS_REFLECTION.comment=Strength of wet surface reflections during rain.
+
+# Atmosphere & Fog Options
+option.ENABLE_VOLUMETRIC_FOG=Volumetric Light Shafts & Colored Fog
+option.ENABLE_VOLUMETRIC_FOG.comment=Enables sun rays and fog tinted by nearby colored light sources.
+option.VOLUMETRIC_STEPS=Volumetric Ray Steps
+option.VOLUMETRIC_STEPS.comment=Dithered raymarch steps for light shafts.
+option.FOG_DENSITY_MULTIPLIER=Fog Density
+option.FOG_DENSITY_MULTIPLIER.comment=Controls overall density of atmospheric fog and god rays.
+option.COLORED_LIGHT_FOG_INFLUENCE=Colored Light Fog Tinting
+option.COLORED_LIGHT_FOG_INFLUENCE.comment=How strongly torch, soul lantern, redstone, and lava colors tint nearby fog.
+option.ENABLE_WAVING_FOLIAGE=Waving Leaves & Plants
+option.ENABLE_WAVING_FOLIAGE.comment=Animates leaves, grass, and crops in the wind.
+option.WAVING_SPEED=Wind Wave Speed
+option.WAVING_SPEED.comment=Animation speed of waving foliage.
+option.WATER_WAVE_STRENGTH=Water Wave Height
+option.WATER_WAVE_STRENGTH.comment=Strength of procedural waves on water surfaces.
+
+# Post Processing Options
+option.ENABLE_AUTO_EXPOSURE=Dynamic Eye Adaptation
+option.ENABLE_AUTO_EXPOSURE.comment=Automatically adapts exposure when entering dark caves or bright daylight.
+option.AUTO_EXPOSURE_SPEED=Eye Adaptation Speed
+option.AUTO_EXPOSURE_SPEED.comment=Controls how fast exposure adjusts to dark or bright environments.
+option.ENABLE_FXAA=Anti-Aliasing (FXAA)
+option.ENABLE_FXAA.comment=Smooths jagged edges across the image.
+option.CAS_SHARPENING=Contrast Adaptive Sharpening (CAS)
+option.CAS_SHARPENING.comment=Enhances crisp texture detail without edge ringing.
+option.CINEMATIC_CONTRAST=Cinematic Contrast
+option.CINEMATIC_CONTRAST.comment=Controls filmic S-curve contrast.
+option.CINEMATIC_SATURATION=Color Saturation & Vibrance
+option.CINEMATIC_SATURATION.comment=Adjusts color richness and vibrance.
+option.SHADOW_TOE_LIFT=Shadow Toe Lift
+option.SHADOW_TOE_LIFT.comment=Lifts dark shadow tones in ACES tonemapping to prevent crushed blacks.

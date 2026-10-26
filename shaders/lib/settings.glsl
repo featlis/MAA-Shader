@@ -14,17 +14,17 @@
 #define SHADOW_COLORED_GLASS            // Colored shadows through stained glass
 #define SHADOW_CONTACT_HARDENING        // Sharper shadows near contact point
 
-// --- Directional Blocklight & Tube Occlusion ("筒状光源の指向性") ---
+// --- Directional Blocklight & Tube Occlusion ---
 #define DIRECTIONAL_BLOCKLIGHT          // Reconstruct 3D light direction from gradient
 #define TUBE_OCCLUSION_STRENGTH 0.85    // [0.00 0.50 0.70 0.85 1.00]
 #define BLOCKLIGHT_OCCLUSION_STEPS 4    // [2 4 6 8]
 #define BLOCKLIGHT_INTENSITY 1.35       // [0.80 1.00 1.20 1.35 1.60 2.00]
 #define BLOCKLIGHT_DISTANCE_FALLOFF 1.5 // [1.0 1.25 1.5 1.75 2.0]
 
-// --- Handheld Dynamic Light ("手持ち光源") ---
+// --- Handheld Dynamic Light ---
 // 0: Adaptive Hybrid (Point + Forward Spot boost)
-// 1: Pure Omni-Directional Point Light (松明風全方位)
-// 2: Pure Directional Spotlight / Flashlight (懐中電灯風スポットライト)
+// 1: Pure Omni-Directional Point Light
+// 2: Pure Directional Spotlight / Flashlight
 #define HANDLIGHT_MODE 0                // [0 1 2]
 #define HANDLIGHT_INTENSITY 1.25        // [0.00 0.50 0.80 1.00 1.25 1.50 2.00]
 #define HANDLIGHT_RANGE 18.0            // [10.0 14.0 18.0 24.0 32.0]
@@ -32,7 +32,7 @@
 #define SPOTLIGHT_INNER_COS 0.88        // Inner cone cosine (~28 deg)
 #define SPOTLIGHT_OUTER_COS 0.62        // Outer cone cosine (~51 deg)
 
-// --- Indirect Light Bounce (SSGI / "光の反射") ---
+// --- Indirect Light Bounce (SSGI) ---
 #define ENABLE_SSGI                     // Screen-Space Global Illumination bounce
 #define SSGI_SAMPLES 4                  // [0 2 4 6 8]
 #define SSGI_STEPS 5                    // [3 4 5 6 8]
@@ -44,7 +44,7 @@
 #define SPECULAR_STRENGTH 1.0           // [0.0 0.5 0.8 1.0 1.5]
 #define WETNESS_REFLECTION 0.85         // [0.0 0.5 0.85 1.0] Rain puddle reflections
 
-// --- Ambient & Shadow Visibility ("暗くなりすぎない設計") ---
+// --- Ambient & Shadow Visibility ---
 #define MIN_CAVE_BRIGHTNESS 0.085       // [0.03 0.05 0.085 0.12 0.18 0.25] Prevents pitch-black caves
 #define SKY_AMBIENT_INTENSITY 1.05      // [0.60 0.80 1.00 1.05 1.25 1.50]
 #define GROUND_BOUNCE_STRENGTH 0.28     // [0.10 0.20 0.28 0.40]

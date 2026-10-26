@@ -19,15 +19,13 @@ uniform int frameCounter;
 
 in vec2 vTexCoord;
 
-/* RENDERTARGETS: 4,6 */
-layout(location = 0) out vec4 outSSGI; // colortex4: rgb = Indirect Bounce Radiance, a = Screen-Space AO
-layout(location = 1) out vec4 outSSR;  // colortex6: rgb = SSR Reflection Color, a = Fresnel weight
+/* DRAWBUFFERS:46 */
 
 void main() {
     float depth = texture(depthtex0, vTexCoord).r;
     if (depth >= 0.9999) {
-        outSSGI = vec4(0.0, 0.0, 0.0, 1.0);
-        outSSR  = vec4(0.0, 0.0, 0.0, 0.0);
+        gl_FragData[0] = vec4(0.0, 0.0, 0.0, 1.0);
+        gl_FragData[1] = vec4(0.0, 0.0, 0.0, 0.0);
         return;
     }
 
@@ -45,7 +43,7 @@ void main() {
     float dither = interleavedGradientNoise(gl_FragCoord.xy, frameCounter);
 
     // 1. Compute Screen-Space Indirect Light Bounce (SSGI Color Bleeding) & AO
-    outSSGI = computeSSGIBounceAndAO(
+    gl_FragData[0] = computeSSGIBounceAndAO(
         viewPos, viewNormal, vTexCoord, dither,
         colortex3, colortex1, depthtex0,
         gbufferProjection, gbufferProjectionInverse
@@ -55,11 +53,10 @@ void main() {
     vec3 sunWorldDir = normalize(mat3(gbufferModelViewInverse) * normalize(sunPosition));
     AtmosphereColors atm = getAtmosphereColors(sunWorldDir.y, rainStrength);
 
-    outSSR = computeScreenSpaceReflection(
+    gl_FragData[1] = computeScreenSpaceReflection(
         viewPos, viewNormal, worldNormal,
         smoothness, f0, skyLight, dither, atm,
         colortex3, depthtex0,
         gbufferProjection, gbufferProjectionInverse
     );
 }
-

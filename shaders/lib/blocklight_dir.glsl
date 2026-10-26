@@ -32,7 +32,7 @@ float traceTubeWallOcclusion(
     float searchDist,
     float dither,
     sampler2D depthTex,
-    sampler2D colortex0,
+    sampler2D colortex2,
     mat4 proj,
     mat4 projInv
 ) {
@@ -56,7 +56,7 @@ float traceTubeWallOcclusion(
         if (sampleDepth >= 0.9999) continue;
 
         vec3 geomViewPos = screenToView(screenPos.xy, sampleDepth, projInv);
-        float sampleMat = texture(colortex0, screenPos.xy).a;
+        float sampleMat = texture(colortex2, screenPos.xy).a;
 
         // If we hit the emissive light block itself, the path to the light is clear!
         if (isEmissiveMaterial(sampleMat)) {
@@ -84,7 +84,7 @@ BlocklightResult computeDirectionalBlocklight(
     float smoothness,
     float f0,
     float dither,
-    sampler2D colortex0,
+    sampler2D colortex2,
     sampler2D colortex1,
     sampler2D depthTex,
     mat4 proj,
@@ -102,7 +102,6 @@ BlocklightResult computeDirectionalBlocklight(
     }
 
     // Physical non-linear attenuation curve from vanilla [0..1] lightmap
-    // Preserves bright core near source while creating natural inverse-square falloff
     float distRatio = 1.0 - rawBlockLight;
     float physicalAtten = pow(rawBlockLight, BLOCKLIGHT_DISTANCE_FALLOFF) / (1.0 + 2.2 * distRatio * distRatio);
     physicalAtten *= BLOCKLIGHT_INTENSITY;
@@ -114,7 +113,6 @@ BlocklightResult computeDirectionalBlocklight(
     vec3 gradAccum = vec3(0.0);
     vec3 colorAccum = res.lightColor * 0.35;
     float colorWeight = 0.35;
-    float enclosureCount = 0.0;
 
     float viewDist = max(length(viewPos), 1.0);
     vec2 shortRadius = vec2(0.004, 0.004 * 1.77) / clamp(viewDist * 0.15, 0.5, 3.0);
@@ -127,13 +125,12 @@ BlocklightResult computeDirectionalBlocklight(
 
     for (int i = 0; i < 8; i++) {
         vec2 dir2D = rot * GRAD_DIRS[i];
-        // Alternate between close gradient samples and wide light-finder samples
         vec2 sampleUV = texCoord + dir2D * ((i % 2 == 0) ? shortRadius : wideRadius);
         sampleUV = clamp(sampleUV, vec2(0.002), vec2(0.998));
 
         vec4 nData = texture(colortex1, sampleUV);
         float nLight = nData.b;
-        float nMat   = texture(colortex0, sampleUV).a;
+        float nMat   = texture(colortex2, sampleUV).a;
         float nDepth = texture(depthTex, sampleUV).r;
 
         if (nDepth >= 0.9999) continue;
@@ -146,7 +143,6 @@ BlocklightResult computeDirectionalBlocklight(
             vec3 dir3D = deltaPos / dist3D;
             float lightDiff = nLight - rawBlockLight;
 
-            // Detect if neighbor is an emissive block (e.g. inside tube or visible torch)
             if (isEmissiveMaterial(nMat)) {
                 lightDiff += 0.55;
                 vec3 eCol = getEmissiveColorFromMat(nMat, 1.0);
@@ -154,20 +150,13 @@ BlocklightResult computeDirectionalBlocklight(
                 colorAccum += eCol * w;
                 colorWeight += w;
             } else if (nLight > rawBlockLight + 0.02) {
-                // High-light region (such as an illuminated tube opening!) acts as virtual emitter
                 float w = (nLight - rawBlockLight) * 1.5 / (0.8 + dist3D * 0.5);
                 colorAccum += getEmissiveColorFromMat(MAT_EMISSIVE_WARM, nLight) * w;
                 colorWeight += w;
             }
 
-            // Accumulate 3D gradient pointing toward brighter blocklight / tube opening
             float gradWeight = lightDiff / (0.25 + dist3D * 0.45);
             gradAccum += dir3D * gradWeight;
-
-            // Check if surrounding geometry forms an enclosing wall/tube
-            if (dot(viewNormal, dir3D) > 0.25 && dist3D < 2.5 && lightDiff < -0.02) {
-                enclosureCount += 1.0;
-            }
         }
     }
 
@@ -177,24 +166,18 @@ BlocklightResult computeDirectionalBlocklight(
     float gradMag = length(gradAccum);
     if (gradMag > 0.008) {
         vec3 inferredDir = gradAccum / gradMag;
-        // Blend between surface normal (isotropic) and inferred 3D light direction
-        // Stronger gradient = stronger directional beam (e.g. exiting a 4-walled tube)
         float directionality = clamp(gradMag * 3.2, 0.0, 0.88);
         res.lightDirView = normalize(mix(viewNormal, inferredDir, directionality));
 
-        // Compute Lambertian incidence angle
         float NoL = dot(viewNormal, res.lightDirView);
-        // Wrapped diffuse so open lights still wrap gently, while perpendicular/away walls dim
         float directTerm = clamp((NoL + 0.30) / 1.30, 0.08, 1.25);
 
-        // Trace 4-step screen-space ray to check if a tube wall blocks line-of-sight
         float searchDist = clamp((1.0 - rawBlockLight) * 6.5 + 0.6, 0.6, 4.5);
         float wallVis = traceTubeWallOcclusion(
             viewPos, viewNormal, res.lightDirView, searchDist,
-            dither, depthTex, colortex0, proj, projInv
+            dither, depthTex, colortex2, proj, projInv
         );
 
-        // If light is enclosed on sides, boost beam along open axis and suppress blocked sides
         float tubeBeamBoost = mix(1.0, 1.28, clamp(gradMag * 2.0, 0.0, 1.0) * wallVis);
         res.directionalOcclusion = mix(1.0, directTerm * wallVis * tubeBeamBoost, directionality * TUBE_OCCLUSION_STRENGTH);
     }
@@ -239,7 +222,6 @@ void computeHandheldLight(
         return;
     }
 
-    // Virtual hand position in view space (slightly right and below camera eye)
     vec3 handPosView = vec3(0.16, -0.14, -0.15);
     vec3 toLight = handPosView - viewPos;
     float dist = length(toLight);
@@ -251,17 +233,13 @@ void computeHandheldLight(
     vec3 L = toLight / dist;
     float NoL = max(dot(viewNormal, L), 0.0);
 
-    // Physical inverse-square attenuation with smooth range window
     float distNorm = clamp(dist / HANDLIGHT_RANGE, 0.0, 1.0);
     float window = clamp(1.0 - distNorm * distNorm * distNorm * distNorm, 0.0, 1.0);
     window *= window;
 
-    // Shape attenuation based on light mode (Point vs Spotlight vs Hybrid)
-    // Camera forward in view space is vec3(0.0, 0.0, -1.0)
     vec3 lightToSurface = -L;
     float spotCos = dot(lightToSurface, vec3(0.0, 0.0, -1.0));
     float spotCone = smoothstep(SPOTLIGHT_OUTER_COS, SPOTLIGHT_INNER_COS, spotCos);
-    // Crisp beam profile with soft outer halo
     float spotProfile = pow(spotCone, 1.35) * 1.85;
 
     float pointAtten = (1.6 / (1.0 + 0.32 * dist * dist)) * window;
@@ -269,13 +247,10 @@ void computeHandheldLight(
 
     float angularAtten;
     #if HANDLIGHT_MODE == 1
-        // Omni-directional Point Light
         angularAtten = pointAtten;
     #elif HANDLIGHT_MODE == 2
-        // Directional Spotlight Cone + subtle ambient spill near hand
         angularAtten = spotAtten + pointAtten * 0.12;
     #else
-        // Adaptive Hybrid: Warm point light near player + focused spotlight beam ahead
         angularAtten = mix(pointAtten * 0.75, spotAtten, 0.55);
     #endif
 
@@ -299,7 +274,6 @@ void computeHandheldLight(
     float totalLight = smoothHeldIntensity * HANDLIGHT_INTENSITY * angularAtten * contactShadow;
     outDiffuse = heldLightColor * totalLight * (NoL * 0.85 + 0.15);
 
-    // Specular highlight from handheld light
     vec3 V = normalize(-viewPos);
     vec3 H = normalize(L + V);
     float NoH = max(dot(viewNormal, H), 0.0);
@@ -310,4 +284,3 @@ void computeHandheldLight(
 }
 
 #endif // BLOCKLIGHT_DIR_GLSL
-

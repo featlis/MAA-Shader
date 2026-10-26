@@ -10,10 +10,7 @@ in vec2 vLmCoord;
 in vec4 vColor;
 in vec3 vViewNormal;
 
-/* RENDERTARGETS: 0,1,2 */
-layout(location = 0) out vec4 outColor0;
-layout(location = 1) out vec4 outColor1;
-layout(location = 2) out vec4 outColor2;
+/* DRAWBUFFERS:012 */
 
 void main() {
     vec4 albedo = texture(tex, vTexCoord) * vColor;
@@ -26,8 +23,7 @@ void main() {
     vec3 viewNormal = normalize(vViewNormal);
     float emission = (vLmCoord.x > 0.96) ? 0.5 : 0.0;
 
-    outColor0 = vec4(albedo.rgb, MAT_TERRAIN);
-    outColor1 = vec4(encodeNormal(viewNormal), vLmCoord.x, vLmCoord.y);
-    outColor2 = vec4(0.25, 0.04, emission, 1.0);
+    gl_FragData[0] = vec4(albedo.rgb, albedo.a);
+    gl_FragData[1] = vec4(encodeNormal(viewNormal), vLmCoord.x, vLmCoord.y);
+    gl_FragData[2] = vec4(0.25, 0.04, emission, MAT_TERRAIN);
 }
-

@@ -13,11 +13,12 @@ const int colortex3Format = RGBA16F;
 const int colortex4Format = RGBA16F;
 const int colortex5Format = RGBA16F;
 const int colortex6Format = RGBA16F;
+const int colortex7Format = RGBA16F;
 const bool colortex5Clear = false;
 */
 
-const int shadowMapResolution = SHADOW_MAP_RESOLUTION;
-const float shadowDistance = SHADOW_DISTANCE;
+const int shadowMapResolution = 2048; // [1024 1536 2048 3072 4096]
+const float shadowDistance = 128.0; // [64.0 96.0 128.0 160.0 192.0 256.0]
 const float sunPathRotation = -25.0;
 const float shadowIntervalSize = 2.0;
 const bool generateShadowMipmap = false;
@@ -47,14 +48,10 @@ uniform int heldItemId;
 uniform int heldItemId2;
 uniform int heldBlockLightValue;
 uniform int heldBlockLightValue2;
-uniform float viewWidth;
-uniform float viewHeight;
 
 in vec2 vTexCoord;
 
-/* RENDERTARGETS: 3,5 */
-layout(location = 0) out vec4 outDirectRadiance; // colortex3: Direct lit scene radiance
-layout(location = 1) out vec4 outTemporalState;  // colortex5: Smooth handheld light state
+/* DRAWBUFFERS:35 */
 
 void main() {
     // 1. Update Smooth Handheld Dynamic Light State (Temporal Exponential Smoothing)
@@ -68,7 +65,6 @@ void main() {
     float prevIntensity = prevState.r;
     vec3 prevColor = prevState.gba;
 
-    // Guard against uninitialized / NaN values on first frame
     if (isnan(prevIntensity) || isinf(prevIntensity) || prevIntensity < 0.0 || prevIntensity > 2.0) {
         prevIntensity = targetHeldIntensity;
         prevColor = targetHeldColor;
@@ -82,7 +78,7 @@ void main() {
     float smoothHeldIntensity = mix(prevIntensity, targetHeldIntensity, lerpFactor);
     vec3 smoothHeldColor = mix(prevColor, targetHeldColor, lerpFactor);
 
-    outTemporalState = vec4(smoothHeldIntensity, smoothHeldColor);
+    gl_FragData[1] = vec4(smoothHeldIntensity, smoothHeldColor);
 
     // 2. Sample G-Buffers
     vec4 c0 = texture(colortex0, vTexCoord);
@@ -91,11 +87,11 @@ void main() {
     float depth = texture(depthtex0, vTexCoord).r;
 
     vec3 albedoLinear = toLinear(c0.rgb);
-    float matId = c0.a;
+    float matId = c2.a;
 
     // Sky pass-through
     if (depth >= 0.9999) {
-        outDirectRadiance = vec4(albedoLinear, 1.0);
+        gl_FragData[0] = vec4(albedoLinear, 1.0);
         return;
     }
 
@@ -106,7 +102,6 @@ void main() {
     float smoothness = c2.r;
     float f0         = c2.g;
     float emission   = c2.b;
-    float vanillaAO  = c2.a;
 
     vec3 viewPos   = screenToView(vTexCoord, depth, gbufferProjectionInverse);
     vec3 playerPos = (gbufferModelViewInverse * vec4(viewPos, 1.0)).xyz;
@@ -122,7 +117,6 @@ void main() {
     float rawNoL = dot(viewNormal, lightDirView);
     float NoL = max(rawNoL, 0.0);
 
-    // Foliage subsurface scattering (backlit leaves/plants glow warmly in sunlight)
     float subsurface = 0.0;
     if (isMaterial(matId, MAT_FOLIAGE)) {
         subsurface = max(-rawNoL, 0.0) * 0.55 + 0.20;
@@ -132,7 +126,6 @@ void main() {
     vec3 sunShadow = vec3(0.0);
     if ((NoL > 0.001 || subsurface > 0.001) && skyLight > 0.01) {
         if (isMaterial(matId, MAT_HAND)) {
-            // First-person hand self-shadow avoidance
             sunShadow = vec3(smoothstep(0.1, 0.6, skyLight));
         } else {
             sunShadow = sampleDirectionalShadow(
@@ -140,12 +133,10 @@ void main() {
                 shadowtex0, shadowtex1, shadowcolor0,
                 shadowModelView, shadowProjection
             );
-            // Modulate outdoor shadow by skylight cave transition
             sunShadow *= smoothstep(0.02, 0.35, skyLight);
         }
     }
 
-    // Rain clouds soften direct shadow contrast
     sunShadow = mix(sunShadow, vec3(0.45), rainStrength * 0.75);
 
     vec3 directDiffuse = atm.directLight * sunShadow * (NoL + subsurface * vec3(0.95, 1.05, 0.65));
@@ -159,10 +150,10 @@ void main() {
     float sunSpecTerm = ((specPower + 2.0) * 0.125) * pow(NoH, specPower) * fresnelSchlickScalar(VoH, f0);
     vec3 directSpecular = atm.directLight * sunShadow * sunSpecTerm * NoL * smoothness * SPECULAR_STRENGTH;
 
-    // 4. Directional Blocklight & Tube Occlusion ("筒状光源の指向性と遮蔽")
+    // 4. Directional Blocklight & Tube Occlusion
     BlocklightResult blk = computeDirectionalBlocklight(
         viewPos, viewNormal, vTexCoord, blockLight, smoothness, f0, dither,
-        colortex0, colortex1, depthtex0, gbufferProjection, gbufferProjectionInverse
+        colortex2, colortex1, depthtex0, gbufferProjection, gbufferProjectionInverse
     );
 
     // 5. Smooth Handheld Dynamic Light (Point + Spotlight Cone)
@@ -181,12 +172,11 @@ void main() {
         emissiveRadiance = mix(albedoLinear, albedoLinear * eTint * 1.4, 0.65) * emission * 3.2;
     }
 
-    // Metallic tinting of specular highlights
     vec3 specTint = isMaterial(matId, MAT_METALLIC) ? mix(vec3(1.0), albedoLinear * 1.35, 0.75) : vec3(1.0);
 
-    vec3 totalDirect = albedoLinear * (directDiffuse + blk.diffuse + handDiffuse) * vanillaAO
+    vec3 totalDirect = albedoLinear * (directDiffuse + blk.diffuse + handDiffuse)
                      + (directSpecular + blk.specular + handSpecular) * specTint
                      + emissiveRadiance;
 
-    outDirectRadiance = vec4(max(totalDirect, vec3(0.0)), blk.directionalOcclusion);
+    gl_FragData[0] = vec4(max(totalDirect, vec3(0.0)), blk.directionalOcclusion);
 }

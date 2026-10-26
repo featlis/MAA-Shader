@@ -3,7 +3,6 @@
 #include "/lib/common.glsl"
 #include "/lib/colors.glsl"
 
-uniform vec4 starData;
 uniform vec3 sunPosition;
 uniform float rainStrength;
 uniform mat4 gbufferModelViewInverse;
@@ -11,17 +10,15 @@ uniform mat4 gbufferModelViewInverse;
 in vec4 vColor;
 in vec3 vViewPos;
 
-/* RENDERTARGETS: 0,1,2 */
-layout(location = 0) out vec4 outColor0;
-layout(location = 1) out vec4 outColor1;
-layout(location = 2) out vec4 outColor2;
+/* DRAWBUFFERS:012 */
 
 void main() {
-    if (starData.r > 0.5) {
-        // Star geometry
-        outColor0 = vec4(vColor.rgb * 1.45, MAT_SKY);
-        outColor1 = vec4(0.5, 0.5, 0.0, 1.0);
-        outColor2 = vec4(0.0, 0.0, 1.0, 1.0);
+    // Detect stars: equal R, G, B channels > 0
+    bool isStar = (abs(vColor.r - vColor.g) < 0.01 && abs(vColor.g - vColor.b) < 0.01 && vColor.r > 0.02 && vColor.r < 0.95);
+    if (isStar) {
+        gl_FragData[0] = vec4(vColor.rgb * 1.65, 1.0);
+        gl_FragData[1] = vec4(0.5, 0.5, 0.0, 1.0);
+        gl_FragData[2] = vec4(0.0, 0.0, 1.0, MAT_SKY);
         return;
     }
 
@@ -34,13 +31,11 @@ void main() {
     float zenithFactor = pow(clamp(worldDir.y, 0.0, 1.0), 0.55);
     vec3 skyColor = mix(atm.skyHorizon, atm.skyZenith, zenithFactor);
 
-    // Subtle solar halo around sun/moon
     float sunCos = dot(worldDir, sunWorldDir);
     float sunGlow = pow(clamp(sunCos * 0.5 + 0.5, 0.0, 1.0), 6.0) * (1.0 - rainStrength * 0.85);
     skyColor += atm.directLight * sunGlow * 0.24;
 
-    outColor0 = vec4(skyColor, MAT_SKY);
-    outColor1 = vec4(0.5, 0.5, 0.0, 1.0);
-    outColor2 = vec4(0.0, 0.0, 0.0, 1.0);
+    gl_FragData[0] = vec4(skyColor, 1.0);
+    gl_FragData[1] = vec4(0.5, 0.5, 0.0, 1.0);
+    gl_FragData[2] = vec4(0.0, 0.0, 0.0, MAT_SKY);
 }
-
