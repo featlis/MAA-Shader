@@ -28,6 +28,8 @@ uniform sampler2D colortex0;
 uniform sampler2D colortex1;
 uniform sampler2D colortex2;
 uniform sampler2D colortex5;
+uniform sampler2D colortex6;
+uniform sampler2D colortex7;
 uniform sampler2D depthtex0;
 uniform sampler2D depthtex1;
 uniform sampler2D shadowtex0;
@@ -87,10 +89,12 @@ void main() {
     vec4 c0 = texture(colortex0, vTexCoord);
     vec4 c1 = texture(colortex1, vTexCoord);
     vec4 c2 = texture(colortex2, vTexCoord);
+    vec4 opaqueBg = texture(colortex7, vTexCoord);
     float depth = texture(depthtex0, vTexCoord).r;
 
     vec3 albedoLinear = toLinear(c0.rgb);
     float matId = c2.a;
+    float opaqueMatId = opaqueBg.a;
 
     // Sky pass-through
     if (depth >= 0.9999) {
@@ -121,10 +125,17 @@ void main() {
     float rawNoL = dot(viewNormal, lightDirView);
     float NoL = max(rawNoL, 0.0);
 
+    bool isTranslucent = isMaterial(matId, MAT_STAINED_GLASS) ||
+                         isMaterial(matId, MAT_GLASS) ||
+                         isMaterial(matId, MAT_WATER);
+
     float subsurface = 0.0;
     if (isMaterial(matId, MAT_FOLIAGE)) {
         subsurface = max(-rawNoL, 0.0) * 0.55 + 0.18;
         NoL = max(NoL, 0.22);
+    } else if (isTranslucent) {
+        // Translucent glass/water is lit from both front and back
+        NoL = max(abs(rawNoL), 0.35);
     }
 
     vec3 sunShadow = vec3(0.0);
@@ -133,7 +144,7 @@ void main() {
             sunShadow = vec3(smoothstep(0.1, 0.6, skyLight));
         } else {
             sunShadow = sampleDirectionalShadow(
-                playerPos, worldNormal, max(NoL, 0.12), dither,
+                playerPos, worldNormal, max(NoL, 0.15), dither,
                 shadowtex0, shadowtex1, shadowcolor0,
                 shadowModelView, shadowProjection
             );
@@ -152,6 +163,9 @@ void main() {
         smoothness, f0, matId,
         sunDiffuseBRDF, sunSpecularBRDF
     );
+    if (isTranslucent) {
+        sunDiffuseBRDF = max(sunDiffuseBRDF, vec3(NoL * 0.65));
+    }
 
     vec3 directDiffuse  = atm.directLight * sunShadow * (sunDiffuseBRDF + subsurface * vec3(0.95, 1.05, 0.65));
     vec3 directSpecular = atm.directLight * sunShadow * sunSpecularBRDF;
@@ -159,8 +173,8 @@ void main() {
     // 4. Directional Blocklight, Tube Occlusion & Stained Glass Transmission
     BlocklightResult blk = computeDirectionalBlocklight(
         viewPos, worldPos, viewNormal, vTexCoord, albedoLinear,
-        blockLight, smoothness, f0, matId, frameTimeCounter, dither,
-        colortex0, colortex1, colortex2, depthtex0, depthtex1,
+        blockLight, smoothness, f0, matId, frameTimeCounter,
+        colortex0, colortex1, colortex2, colortex6, colortex7, depthtex0, depthtex1,
         gbufferProjection, gbufferProjectionInverse
     );
 
@@ -169,13 +183,13 @@ void main() {
     vec3 handSpecular = vec3(0.0);
     computeHandheldLight(
         viewPos, viewNormal, albedoLinear, smoothHeldIntensity, smoothHeldColor,
-        smoothness, f0, matId, dither,
-        depthtex0, depthtex1, colortex0, colortex2,
+        smoothness, f0, matId,
+        depthtex0, depthtex1, colortex2, colortex6,
         gbufferProjection, gbufferProjectionInverse,
         handDiffuse, handSpecular
     );
 
-    // 6. Emissive Surface Radiance with Block Chromaticity & Distant Scintillation
+    // 6. Emissive Surface Radiance (Directly on Emitter OR Transmitted Through Translucent Glass!)
     vec3 emissiveRadiance = vec3(0.0);
     if (emission > 0.01) {
         vec3 eTint = getEmissiveColorFromMatAndTex(matId, albedoLinear, 1.0);
@@ -184,10 +198,21 @@ void main() {
                        isMaterial(matId, MAT_EMISSIVE_LAVA);
         float emitterShimmer = computeLightShimmer(worldPos, length(viewPos), frameTimeCounter, isFlame);
         emissiveRadiance = mix(albedoLinear, albedoLinear * eTint * 1.45, 0.72) * emission * 3.8 * emitterShimmer;
+    } else if (isTranslucent && isEmissiveMaterial(opaqueMatId)) {
+        // An emissive light block (e.g. Sea Lantern, Torch, Glowstone) is directly behind Stained/Clear Glass!
+        vec3 bgAlbedoLinear = toLinear(opaqueBg.rgb);
+        vec3 bgEmitTint = getEmissiveColorFromMatAndTex(opaqueMatId, bgAlbedoLinear, 1.0);
+        float emitterShimmer = computeLightShimmer(worldPos, length(viewPos), frameTimeCounter, false);
+
+        if (isMaterial(matId, MAT_STAINED_GLASS)) {
+            vec3 pureGlassLinear = toLinear(texture(colortex6, vTexCoord).rgb);
+            vec3 tintedGlow = tintLightByStainedGlass(bgEmitTint, pureGlassLinear, 0.94);
+            emissiveRadiance = mix(pureGlassLinear, tintedGlow, 0.65) * 1.95 * emitterShimmer;
+        } else {
+            emissiveRadiance = mix(albedoLinear, bgAlbedoLinear * bgEmitTint * 1.35, 0.75) * 3.2 * emitterShimmer;
+        }
     }
 
-    // Note: evaluatePBRSurface already tints metallic specular by albedoLinear via F0,
-    // and scales diffuse by energy conservation (1 - F) * (1 - metalness)
     vec3 totalDirect = albedoLinear * (directDiffuse + blk.diffuse + handDiffuse)
                      + (directSpecular + blk.specular + handSpecular)
                      + emissiveRadiance;

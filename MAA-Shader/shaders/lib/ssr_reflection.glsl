@@ -24,8 +24,8 @@ vec4 computeScreenSpaceReflection(
     return vec4(0.0);
     #endif
 
-    // Rough materials (stone, dirt, wood: smoothness < 0.30) do not produce sharp mirror reflections
-    if (smoothness < 0.30) {
+    // Rough materials (stone, dirt, wood: smoothness < 0.35) do not produce mirror reflections
+    if (smoothness < 0.35) {
         return vec4(0.0);
     }
 
@@ -36,8 +36,10 @@ vec4 computeScreenSpaceReflection(
     bool isMetal = isMaterial(matId, MAT_METALLIC);
     vec3 F0 = isMetal ? mix(vec3(f0), albedoLinear * 1.15, 0.82) : vec3(f0);
 
-    // Physical roughness-attenuated Schlick Fresnel
-    float glossMask = smoothstep(0.30, 0.85, smoothness);
+    // Physical roughness-attenuated Schlick Fresnel:
+    // Dielectrics (glass, ice, water) reflect strongly at grazing angles and subtly at normal incidence;
+    // Metals (iron, gold, copper, diamond) reflect strongly at all angles!
+    float glossMask = smoothstep(0.35, 0.85, smoothness);
     vec3 fresnelVec = fresnelSchlickRoughness(NoV, F0, roughness) * glossMask;
     float fresnelScalar = max(fresnelVec.r, max(fresnelVec.g, fresnelVec.b));
 
@@ -45,38 +47,25 @@ vec4 computeScreenSpaceReflection(
         return vec4(0.0);
     }
 
+    // Deterministic reflection ray (zero per-pixel stipple noise)
     vec3 reflectDir = reflect(-V, viewNormal);
-
-    // Roughness cone perturbation: semi-gloss polished stone has a softer reflection cone,
-    // while high-gloss glass/metal/water has a razor-sharp reflection ray
-    if (roughness > 0.04) {
-        vec3 t, b;
-        float signZ = (reflectDir.z >= 0.0) ? 1.0 : -1.0;
-        float a = -1.0 / (signZ + reflectDir.z);
-        float bVal = reflectDir.x * reflectDir.y * a;
-        t = vec3(1.0 + signZ * reflectDir.x * reflectDir.x * a, signZ * bVal, -signZ * reflectDir.x);
-        b = vec3(bVal, signZ + reflectDir.y * reflectDir.y * a, -reflectDir.y);
-
-        float angle = dither * 2.0 * PI;
-        float spread = roughness * roughness * 0.22;
-        reflectDir = normalize(reflectDir + (t * cos(angle) + b * sin(angle)) * spread);
-    }
 
     // Fallback sky reflection (scaled by skylight so indoor/caves don't reflect outdoor sky)
     float upDot = clamp(worldNormal.y * 0.5 + 0.5, 0.0, 1.0);
-    vec3 skyFallback = mix(atm.skyHorizon, atm.skyZenith, upDot) * (skyLight * skyLight);
+    vec3 skyFallback = mix(atm.skyHorizon, atm.skyZenith, upDot) * (skyLight * skyLight * skyLight);
 
-    // Raymarch in view space with exponential step growth
+    // Raymarch in view space with fine, consistent steps to prevent floating ghost stickers
     int steps = SSR_STEPS;
-    vec3 rayPos = viewPos + viewNormal * 0.05;
-    float stepLength = 0.22 + 0.18 * dither;
+    vec3 rayPos = viewPos + viewNormal * 0.06;
+    float stepLength = 0.22;
 
     vec2 hitUV = vec2(-1.0);
     float hitConfidence = 0.0;
+    float hitDist3D = 0.0;
 
     for (int i = 0; i < steps; i++) {
         rayPos += reflectDir * stepLength;
-        stepLength *= 1.30;
+        stepLength *= 1.24;
 
         if (rayPos.z > -0.1) break;
 
@@ -91,27 +80,44 @@ vec4 computeScreenSpaceReflection(
         vec3 geomPos = screenToView(sc.xy, sceneDepth, projInv);
         float depthDiff = geomPos.z - rayPos.z;
 
-        float thickness = max(stepLength * 1.35, 0.42);
-        if (depthDiff > 0.01 && depthDiff < thickness) {
-            vec3 refinedPos = rayPos - reflectDir * (stepLength * clamp(depthDiff / thickness, 0.1, 0.9));
+        // Tight 3D thickness check prevents false hits on foreground geometry
+        float thickness = min(stepLength * 1.15, 0.34);
+        if (depthDiff > 0.015 && depthDiff < thickness) {
+            // 2-step binary refinement for sub-pixel reflection accuracy
+            vec3 refinedPos = rayPos - reflectDir * (stepLength * clamp(depthDiff / thickness, 0.15, 0.85));
             vec3 refinedSC = viewToScreen(refinedPos, proj);
             hitUV = refinedSC.xy;
+            hitDist3D = length(refinedPos - viewPos);
 
-            vec2 edgeDist = smoothstep(vec2(0.0), vec2(0.07), hitUV) *
-                            (1.0 - smoothstep(vec2(0.93), vec2(1.0), hitUV));
-            hitConfidence = edgeDist.x * edgeDist.y;
+            vec2 edgeDist = smoothstep(vec2(0.0), vec2(0.10), hitUV) *
+                            (1.0 - smoothstep(vec2(0.90), vec2(1.0), hitUV));
+            float distFade = exp(-hitDist3D * mix(0.28, 0.08, smoothness));
+            hitConfidence = edgeDist.x * edgeDist.y * distFade;
             break;
         }
     }
 
     vec3 reflectedColor = skyFallback;
     if (hitConfidence > 0.001) {
-        vec3 ssrSample = texture(directLitTex, hitUV).rgb;
+        // Roughness-scaled 5-tap cross filter so semi-gloss surfaces (like frosty ice or polished stone)
+        // show a smooth, blurry optical reflection instead of a sharp floating cutout sticker!
+        float blurRadius = roughness * (0.003 + hitDist3D * 0.0025);
+        vec3 s0 = texture(directLitTex, hitUV).rgb;
+        vec3 s1 = texture(directLitTex, clamp(hitUV + vec2( blurRadius,  blurRadius * 0.6), vec2(0.002), vec2(0.998))).rgb;
+        vec3 s2 = texture(directLitTex, clamp(hitUV + vec2(-blurRadius,  blurRadius * 0.6), vec2(0.002), vec2(0.998))).rgb;
+        vec3 s3 = texture(directLitTex, clamp(hitUV + vec2( blurRadius * 0.6, -blurRadius), vec2(0.002), vec2(0.998))).rgb;
+        vec3 s4 = texture(directLitTex, clamp(hitUV + vec2(-blurRadius * 0.6, -blurRadius), vec2(0.002), vec2(0.998))).rgb;
+        vec3 ssrSample = s0 * 0.36 + (s1 + s2 + s3 + s4) * 0.16;
+
+        // Compress extreme HDR emitter values so dielectric reflections look naturally blended into the surface
+        float sampleLuma = getLuminance(ssrSample);
+        float maxCompression = isMetal ? 0.18 : 0.55;
+        ssrSample /= (1.0 + sampleLuma * maxCompression);
+
         reflectedColor = mix(skyFallback, ssrSample, hitConfidence);
     }
 
-    // High-gloss materials (glass, metal, water) reflect crisply and strongly
-    float materialBoost = (isMaterial(matId, MAT_GLASS) || isMaterial(matId, MAT_STAINED_GLASS) || isMetal) ? 1.25 : 0.90;
+    float materialBoost = isMetal ? 1.25 : 0.85;
     return vec4(reflectedColor * fresnelVec * SPECULAR_STRENGTH * materialBoost, fresnelScalar);
 }
 

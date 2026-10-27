@@ -13,7 +13,7 @@ in vec3 vViewNormal;
 in vec3 vWorldPos;
 flat in int vBlockId;
 
-/* DRAWBUFFERS:012 */
+/* DRAWBUFFERS:0126 */
 
 vec3 getWaterWaveNormal(vec3 worldPos, float time) {
     vec2 p = worldPos.xz;
@@ -49,10 +49,11 @@ void main() {
     }
 
     vec3 viewNormal = normalize(vViewNormal);
-    float smoothness = 0.94;
-    float f0 = 0.06;
+    float smoothness = 0.88;
+    float f0 = 0.05;
     float outAlpha = albedo.a;
     float matId = MAT_GLASS;
+    vec3 pureTranslucentColor = albedo.rgb;
 
     if (vBlockId == 10008) {
         vec3 waveWorldNormal = getWaterWaveNormal(vWorldPos, frameTimeCounter);
@@ -60,26 +61,32 @@ void main() {
 
         float waterLuma = getLuminance(albedo.rgb);
         albedo.rgb = mix(vec3(0.04, 0.20, 0.28), albedo.rgb * vec3(0.22, 0.62, 0.78), 0.35) * (0.65 + waterLuma * 0.7);
+        pureTranslucentColor = albedo.rgb;
         outAlpha = 0.50;
-        smoothness = 0.96;
+        smoothness = 0.95;
         f0 = 0.05;
         matId = MAT_WATER;
     } else if (vBlockId == 10009) {
-        // Stained Glass & Panes: enrich chromatic saturation and set high-gloss optical properties
+        // Stained Glass & Panes: enrich chromatic saturation and store pure unblended color in colortex6
         float luma = getLuminance(albedo.rgb);
-        albedo.rgb = clamp(mix(vec3(luma), albedo.rgb, 1.40), vec3(0.02), vec3(1.0));
-        outAlpha = clamp(albedo.a * 0.72, 0.28, 0.78);
-        smoothness = 0.96;
-        f0 = 0.06;
+        float maxC = max(albedo.r, max(albedo.g, albedo.b));
+        vec3 normChroma = (maxC > 0.02) ? (albedo.rgb / maxC) : vec3(0.8);
+        pureTranslucentColor = clamp(mix(vec3(getLuminance(normChroma)), normChroma, 1.45), vec3(0.04), vec3(1.0));
+        albedo.rgb = clamp(mix(vec3(luma), albedo.rgb, 1.40), vec3(0.03), vec3(1.0));
+        outAlpha = clamp(albedo.a * 0.65, 0.25, 0.72);
+        smoothness = 0.90;
+        f0 = 0.05;
         matId = MAT_STAINED_GLASS;
     } else {
-        // Clear Glass, Ice, Packed Ice, Slime, Honey
-        smoothness = 0.94;
-        f0 = 0.06;
+        // Clear Glass, Translucent Ice, Slime, Honey
+        smoothness = 0.88;
+        f0 = 0.05;
         matId = MAT_GLASS;
     }
 
     gl_FragData[0] = vec4(albedo.rgb, outAlpha);
     gl_FragData[1] = vec4(encodeNormal(viewNormal), vLmCoord.x, vLmCoord.y);
     gl_FragData[2] = vec4(smoothness, f0, 0.0, matId);
+    // Store pure unblended translucent color & alpha in colortex6 for stained glass optical filtering
+    gl_FragData[3] = vec4(pureTranslucentColor, outAlpha);
 }

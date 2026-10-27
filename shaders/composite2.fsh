@@ -89,6 +89,9 @@ void main() {
     );
     vec3 indirectBounce = ssgiFiltered.rgb;
     float ssao = ssgiFiltered.a;
+    if (isMaterial(matId, MAT_STAINED_GLASS) || isMaterial(matId, MAT_GLASS) || isMaterial(matId, MAT_WATER)) {
+        ssao = 1.0;
+    }
 
     // 2. Hemispherical Skylight + Ground Bounce + Crisp Cave Floor
     float hemiUp = worldNormal.y * 0.5 + 0.5;

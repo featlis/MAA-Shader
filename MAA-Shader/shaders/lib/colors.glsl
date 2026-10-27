@@ -12,7 +12,7 @@ const vec3 COLOR_GOLD_GLOW  = vec3(1.00, 0.72, 0.28);
 const vec3 COLOR_SOUL_CYAN  = vec3(0.12, 0.82, 1.00);
 const vec3 COLOR_REDSTONE   = vec3(1.00, 0.10, 0.05);
 const vec3 COLOR_LAVA_FIRE  = vec3(1.00, 0.36, 0.04);
-const vec3 COLOR_SEA_AQUA   = vec3(0.36, 0.96, 0.88);
+const vec3 COLOR_SEA_AQUA   = vec3(0.66, 0.96, 1.00);
 const vec3 COLOR_END_VIOLET = vec3(0.88, 0.64, 1.00);
 
 // Returns the characteristic linear light color for an emissive material ID
@@ -53,9 +53,22 @@ vec3 getStainedGlassTransmission(vec3 glassAlbedoLinear, float glassAlpha) {
     float maxC = max(glassAlbedoLinear.r, max(glassAlbedoLinear.g, glassAlbedoLinear.b));
     vec3 normColor = (maxC > 0.01) ? (glassAlbedoLinear / maxC) : vec3(1.0);
     // Deepen chromatic saturation according to Beer-Lambert optical absorption
-    vec3 opticalFilter = pow(clamp(normColor, vec3(0.02), vec3(1.0)), vec3(1.35));
-    float tintStrength = clamp(glassAlpha * 1.35, 0.25, 0.94);
-    return mix(vec3(1.0), opticalFilter * 1.18, tintStrength);
+    vec3 opticalFilter = pow(clamp(normColor, vec3(0.03), vec3(1.0)), vec3(1.25));
+    float tintStrength = clamp(glassAlpha * 1.35, 0.35, 0.94);
+    return mix(vec3(1.0), opticalFilter * 1.22, tintStrength);
+}
+
+// Energy-preserving optical tint when a light source passes through colored stained glass:
+// Shifts the light's hue/chromaticity to the stained glass color without crushing brightness to black!
+vec3 tintLightByStainedGlass(vec3 baseLightColor, vec3 pureGlassLinear, float tintWeight) {
+    float maxG = max(pureGlassLinear.r, max(pureGlassLinear.g, pureGlassLinear.b));
+    if (maxG <= 0.01) return baseLightColor;
+    vec3 glassChroma = pureGlassLinear / maxG;
+    float gLuma = getLuminance(glassChroma);
+    vec3 vividGlass = clamp(mix(vec3(gLuma), glassChroma, 1.55), vec3(0.05), vec3(1.0));
+    float baseEnergy = max(length(baseLightColor), 1.15);
+    vec3 targetColoredLight = normalize(vividGlass) * baseEnergy * 1.12;
+    return mix(baseLightColor, targetColoredLight, clamp(tintWeight, 0.0, 0.95));
 }
 
 // Infers light color from held item ID (mapped via item.properties)

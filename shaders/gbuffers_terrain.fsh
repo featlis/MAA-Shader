@@ -12,7 +12,7 @@ in vec4 vColor;
 in vec3 vViewNormal;
 flat in int vBlockId;
 
-/* DRAWBUFFERS:012 */
+/* DRAWBUFFERS:0127 */
 
 void main() {
     vec4 texSample = texture(tex, vTexCoord);
@@ -40,12 +40,12 @@ void main() {
         f0 = 0.035;
     } else if (vBlockId == 10009) {
         matId = MAT_STAINED_GLASS;
-        smoothness = 0.96;
-        f0 = 0.06;
+        smoothness = 0.90;
+        f0 = 0.05;
     } else if (vBlockId == 10010) {
         matId = MAT_GLASS;
-        smoothness = 0.95;
-        f0 = 0.06;
+        smoothness = 0.88;
+        f0 = 0.05;
     } else if (vBlockId == 10100) {
         matId = MAT_EMISSIVE_WARM;
         emission = clamp(smoothstep(0.22, 0.80, luma) * 0.92 + 0.12, 0.25, 1.0);
@@ -63,7 +63,7 @@ void main() {
         emission = clamp(smoothstep(0.12, 0.70, albedo.r) * 0.95 + 0.20, 0.35, 1.0);
     } else if (vBlockId == 10104) {
         matId = MAT_EMISSIVE_AQUA;
-        emission = clamp(smoothstep(0.25, 0.80, max(albedo.g, luma)) * 0.92 + 0.18, 0.30, 1.0);
+        emission = clamp(smoothstep(0.25, 0.80, max(albedo.g, luma)) * 0.92 + 0.22, 0.35, 1.0);
     } else if (vBlockId == 10105) {
         matId = MAT_EMISSIVE_END;
         emission = clamp(smoothstep(0.20, 0.80, max(albedo.b, luma)) * 0.92 + 0.18, 0.30, 1.0);
@@ -73,8 +73,8 @@ void main() {
         f0 = 0.82;
     } else if (vBlockId == 10201) {
         matId = MAT_POLISHED;
-        smoothness = clamp(0.60 + luma * 0.18, 0.58, 0.78);
-        f0 = 0.06;
+        smoothness = clamp(0.48 + luma * 0.18, 0.45, 0.68);
+        f0 = 0.05;
     } else if (vLmCoord.x > 0.965 && luma > 0.62) {
         if (albedo.b > albedo.r * 1.30 && albedo.g > albedo.r * 1.15) {
             matId = (albedo.g > albedo.b * 1.1) ? MAT_EMISSIVE_AQUA : MAT_EMISSIVE_SOUL;
@@ -85,13 +85,13 @@ void main() {
         } else {
             matId = MAT_EMISSIVE_GOLD;
         }
-        emission = 0.72;
+        emission = 0.75;
     }
 
     // Apply outdoor rain wetness to upward-facing surfaces
     float outdoorWet = wetness * smoothstep(0.75, 0.95, vLmCoord.y) * clamp(worldNormal.y, 0.0, 1.0);
     if (outdoorWet > 0.01 && !isEmissiveMaterial(matId)) {
-        smoothness = mix(smoothness, 0.90, outdoorWet * WETNESS_REFLECTION);
+        smoothness = mix(smoothness, 0.88, outdoorWet * WETNESS_REFLECTION);
         f0 = mix(f0, 0.06, outdoorWet);
         albedo.rgb *= mix(1.0, 0.82, outdoorWet * (1.0 - f0));
     }
@@ -99,4 +99,6 @@ void main() {
     gl_FragData[0] = vec4(albedo.rgb, 1.0);
     gl_FragData[1] = vec4(encodeNormal(viewNormal), vLmCoord.x, vLmCoord.y);
     gl_FragData[2] = vec4(smoothness, f0, emission, matId);
+    // Store opaque albedo & matId in colortex7 so composite knows what lies behind translucent glass/water
+    gl_FragData[3] = vec4(albedo.rgb, matId);
 }

@@ -48,7 +48,7 @@ void main() {
 
     // 1. Compute Material-Dependent Screen-Space Indirect Light Bounce (SSGI) & AO
     gl_FragData[0] = computeSSGIBounceAndAO(
-        viewPos, viewNormal, vTexCoord, smoothness, f0, dither,
+        viewPos, viewNormal, vTexCoord, smoothness, f0, matId, dither,
         colortex3, colortex1, colortex2, depthtex0,
         gbufferProjection, gbufferProjectionInverse
     );
