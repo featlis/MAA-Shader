@@ -34,6 +34,12 @@ vec3 getWaterWaveNormal(vec3 worldPos, float time) {
     dHx += cos(p3) * 3.1 * 0.012;
     dHz += cos(p3) * 2.6 * 0.012;
 
+    // High-frequency micro-wave octave for sparkling sun/moon/lantern glints on water
+    float p4 = p.x * 6.8 - p.y * 5.9 + t * 2.9;
+    float p5 = p.x * 5.4 + p.y * 7.3 - t * 3.2;
+    dHx += (cos(p4) * 6.8 - sin(p5) * 5.4) * 0.0045;
+    dHz += (-cos(p4) * 5.9 + cos(p5) * 7.3) * 0.0045;
+
     dHx *= WATER_WAVE_STRENGTH;
     dHz *= WATER_WAVE_STRENGTH;
 

@@ -96,9 +96,10 @@ void main() {
     float matId = c2.a;
     float opaqueMatId = opaqueBg.a;
 
-    // Sky pass-through
+    // Sky pass-through (preserve HDR star & sun/moon sparkle emission stored in c2.b)
     if (depth >= 0.9999) {
-        gl_FragData[0] = vec4(albedoLinear, 1.0);
+        vec3 skyHDR = albedoLinear * (1.0 + c2.b * 3.2);
+        gl_FragData[0] = vec4(skyHDR, 1.0);
         return;
     }
 
@@ -190,31 +191,43 @@ void main() {
     );
 
     // 6. Emissive Surface Radiance (Directly on Emitter OR Transmitted Through Translucent Glass!)
+    // Includes Nightscape Jewel Boost so distant torches/lanterns/village lights sparkle vividly at night
+    float viewDist = length(viewPos);
+    float nightJewelBoost = 1.0 + smoothstep(6.0, 56.0, viewDist) * (0.65 + atm.nightFactor * 1.15);
+
     vec3 emissiveRadiance = vec3(0.0);
     if (emission > 0.01) {
         vec3 eTint = getEmissiveColorFromMatAndTex(matId, albedoLinear, 1.0);
         bool isFlame = isMaterial(matId, MAT_EMISSIVE_WARM) ||
                        isMaterial(matId, MAT_EMISSIVE_SOUL) ||
                        isMaterial(matId, MAT_EMISSIVE_LAVA);
-        float emitterShimmer = computeLightShimmer(worldPos, length(viewPos), frameTimeCounter, isFlame);
-        emissiveRadiance = mix(albedoLinear, albedoLinear * eTint * 1.45, 0.72) * emission * 3.8 * emitterShimmer;
+        float emitterShimmer = computeLightShimmer(worldPos, viewDist, frameTimeCounter, isFlame);
+        emissiveRadiance = mix(albedoLinear, albedoLinear * eTint * 1.45, 0.72) * emission * 3.8 * emitterShimmer * nightJewelBoost;
     } else if (isTranslucent && isEmissiveMaterial(opaqueMatId)) {
         // An emissive light block (e.g. Sea Lantern, Torch, Glowstone) is directly behind Stained/Clear Glass!
         vec3 bgAlbedoLinear = toLinear(opaqueBg.rgb);
         vec3 bgEmitTint = getEmissiveColorFromMatAndTex(opaqueMatId, bgAlbedoLinear, 1.0);
-        float emitterShimmer = computeLightShimmer(worldPos, length(viewPos), frameTimeCounter, false);
+        float emitterShimmer = computeLightShimmer(worldPos, viewDist, frameTimeCounter, false);
 
         if (isMaterial(matId, MAT_STAINED_GLASS)) {
             vec3 pureGlassLinear = toLinear(texture(colortex6, vTexCoord).rgb);
             vec3 tintedGlow = tintLightByStainedGlass(bgEmitTint, pureGlassLinear, 0.94);
-            emissiveRadiance = mix(pureGlassLinear, tintedGlow, 0.65) * 1.95 * emitterShimmer;
+            emissiveRadiance = mix(pureGlassLinear, tintedGlow, 0.65) * 2.05 * emitterShimmer * nightJewelBoost;
         } else {
-            emissiveRadiance = mix(albedoLinear, bgAlbedoLinear * bgEmitTint * 1.35, 0.75) * 3.2 * emitterShimmer;
+            emissiveRadiance = mix(albedoLinear, bgAlbedoLinear * bgEmitTint * 1.35, 0.75) * 3.4 * emitterShimmer * nightJewelBoost;
         }
+    }
+
+    // Lush Foliage Grazing Rim Glow (backlit grass, flowers & leaves catch light around their edges)
+    vec3 foliageRim = vec3(0.0);
+    if (isMaterial(matId, MAT_FOLIAGE)) {
+        float rimFactor = pow(clamp(1.0 - max(dot(viewNormal, V), 0.0), 0.0, 1.0), 2.6);
+        foliageRim = albedoLinear * (atm.directLight * sunShadow * 0.35 + blk.diffuse * 0.42) * rimFactor;
     }
 
     vec3 totalDirect = albedoLinear * (directDiffuse + blk.diffuse + handDiffuse)
                      + (directSpecular + blk.specular + handSpecular)
+                     + foliageRim
                      + emissiveRadiance;
 
     gl_FragData[0] = vec4(max(totalDirect, vec3(0.0)), blk.directionalOcclusion);

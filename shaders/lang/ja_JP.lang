@@ -90,6 +90,8 @@ option.FOG_DENSITY_MULTIPLIER=霧の濃さ
 option.FOG_DENSITY_MULTIPLIER.comment=空気遠近感の霧および光の筋の濃さを調整します。
 option.COLORED_LIGHT_FOG_INFLUENCE=光源色による霧への影響度
 option.COLORED_LIGHT_FOG_INFLUENCE.comment=松明の暖色、魂のランタンの青緑、レッドストーンの赤色などが周囲の霧を染める強さです。
+option.STAR_SPARKLE_INTENSITY=星空・天の川のきらめき強さ
+option.STAR_SPARKLE_INTENSITY.comment=夜空の星々の瞬きと天の川の輝きを調整します。
 option.ENABLE_HEAT_HAZE=遠景・熱源の光の揺らぎ (陽炎)
 option.ENABLE_HEAT_HAZE.comment=遠くの光源の大気による煌めきや、溶岩・熱源周辺の空気の揺らぎを再現します。
 option.DISTANT_LIGHT_SHIMMER=光の揺らぎの強さ
@@ -102,6 +104,12 @@ option.WATER_WAVE_STRENGTH=水面の波の高さ
 option.WATER_WAVE_STRENGTH.comment=水面の波の法線および揺れの強さを調整します。
 
 # Post Processing Options
+option.ENABLE_BLOOM_AND_SPARKLE=夜景きらめき・光彩ブルーム
+option.ENABLE_BLOOM_AND_SPARKLE.comment=光源や夜景の灯り、水面反射に美しい光彩（ブルーム）と十字のきらめき（クロスグレア）を付与します。
+option.BLOOM_INTENSITY=光彩 (ブルーム) の強さ
+option.BLOOM_INTENSITY.comment=光源の周囲に広がる柔らかい光の滲みの強さを調整します。
+option.SPARKLE_INTENSITY=きらめき (クロススター) の強さ
+option.SPARKLE_INTENSITY.comment=夜景の灯りや星、水面の反射がキラッと輝くクロスグレアの強さを調整します。
 option.ENABLE_AUTO_EXPOSURE=自動露出 (暗所への目の順応)
 option.ENABLE_AUTO_EXPOSURE.comment=暗い洞窟に入ると自動的に目が慣れて見やすくなり、明るい屋外では眩しさを抑えます。
 option.AUTO_EXPOSURE_SPEED=自動露出の順応速度

@@ -90,6 +90,8 @@ option.FOG_DENSITY_MULTIPLIER=Fog Density
 option.FOG_DENSITY_MULTIPLIER.comment=Controls overall density of atmospheric fog and god rays.
 option.COLORED_LIGHT_FOG_INFLUENCE=Colored Light Fog Tinting
 option.COLORED_LIGHT_FOG_INFLUENCE.comment=How strongly torch, soul lantern, redstone, and lava colors tint nearby fog.
+option.STAR_SPARKLE_INTENSITY=Starry Sky & Milky Way Sparkle
+option.STAR_SPARKLE_INTENSITY.comment=Controls the brightness and twinkling of night stars and the Milky Way band.
 option.ENABLE_HEAT_HAZE=Distant Light Shimmer & Heat Haze
 option.ENABLE_HEAT_HAZE.comment=Simulates atmospheric scintillation on distant lights and thermal shimmer near lava/heat.
 option.DISTANT_LIGHT_SHIMMER=Light Shimmer Intensity
@@ -102,6 +104,12 @@ option.WATER_WAVE_STRENGTH=Water Wave Height
 option.WATER_WAVE_STRENGTH.comment=Strength of procedural waves on water surfaces.
 
 # Post Processing Options
+option.ENABLE_BLOOM_AND_SPARKLE=Night Sparkle Glare & HDR Bloom
+option.ENABLE_BLOOM_AND_SPARKLE.comment=Adds optical bloom and 4-point cross-star sparkle to night lights, stars, and water glints.
+option.BLOOM_INTENSITY=HDR Bloom Intensity
+option.BLOOM_INTENSITY.comment=Strength of soft colored glow around light sources.
+option.SPARKLE_INTENSITY=Starburst Sparkle Intensity
+option.SPARKLE_INTENSITY.comment=Strength of 4-point diffraction sparkle rays on bright lights and reflections.
 option.ENABLE_AUTO_EXPOSURE=Dynamic Eye Adaptation
 option.ENABLE_AUTO_EXPOSURE.comment=Automatically adapts exposure when entering dark caves or bright daylight.
 option.AUTO_EXPOSURE_SPEED=Eye Adaptation Speed

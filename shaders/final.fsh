@@ -55,7 +55,11 @@ void main() {
     // 2. Sample HDR image with FXAA + CAS sharpening
     vec3 hdrColor = applyFXAAAndCAS(colortex7, sampleUV, texelSize);
 
-    // 3. Dynamic Eye Adaptation (Smooth Auto-Exposure without washing out shadows)
+    // 3. Add Optical HDR Bloom & 4-Point Cross-Star Sparkle Glare (Night Lights, Stars, Specular Glints)
+    vec3 bloomAndSparkle = computeHDRBloomAndSparkle(colortex7, colortex2, sampleUV, texelSize, frameTimeCounter);
+    hdrColor += bloomAndSparkle;
+
+    // 4. Dynamic Eye Adaptation (Smooth Auto-Exposure without washing out shadows)
     float exposure = 1.0;
     #ifdef ENABLE_AUTO_EXPOSURE
     vec2 eyeNorm = clamp(vec2(eyeBrightnessSmooth) / 240.0, 0.0, 1.0);
@@ -75,14 +79,14 @@ void main() {
 
     hdrColor *= exposure;
 
-    // 4. Cinematic-Realistic ACES Tone Mapping (Crisp Blacks, Natural Roll-off)
+    // 5. Cinematic-Realistic ACES Tone Mapping (Crisp Blacks, Natural Roll-off)
     vec3 tonemappedLinear = cinematicACESTonemap(hdrColor);
 
-    // 5. Convert to sRGB & Apply Cinematic Color Grading
+    // 6. Convert to sRGB & Apply Cinematic Color Grading
     vec3 srgbColor = toSRGB(tonemappedLinear);
     srgbColor = applyCinematicGrading(srgbColor);
 
-    // 6. Subtle Cinematic Vignette
+    // 7. Subtle Cinematic Vignette
     vec2 vigUV = vTexCoord * (1.0 - vTexCoord.yx);
     float vig = clamp(pow(vigUV.x * vigUV.y * 16.0, 0.12), 0.86, 1.0);
     srgbColor *= vig;

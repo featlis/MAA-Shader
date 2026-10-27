@@ -51,24 +51,28 @@
 #define ENABLE_AUTO_EXPOSURE            // Eye adaptation in dark caves / bright sunlight
 #define AUTO_EXPOSURE_SPEED 2.5         // [1.0 2.5 5.0 10.0]
 
-// --- Volumetric Fog, Colored Atmosphere & Distant Shimmer ---
+// --- Volumetric Fog, Starry Sky & Distant Shimmer ---
 #define ENABLE_VOLUMETRIC_FOG           // Colored light shafts & distance atmospheric fog
 #define VOLUMETRIC_STEPS 6              // [4 6 8 12]
 #define FOG_DENSITY_MULTIPLIER 0.65     // [0.0 0.35 0.65 1.0 1.5 2.0]
 #define COLORED_LIGHT_FOG_INFLUENCE 1.25 // [0.0 0.5 1.0 1.25 1.6]
 #define ENABLE_HEAT_HAZE                // Distant light scintillation & thermal shimmer
-#define DISTANT_LIGHT_SHIMMER 1.0       // [0.0 0.5 1.0 1.5 2.0]
+#define DISTANT_LIGHT_SHIMMER 1.15      // [0.0 0.5 1.0 1.15 1.5 2.0]
+#define STAR_SPARKLE_INTENSITY 1.25     // [0.0 0.5 1.0 1.25 1.6 2.0] Twinkling stars & Milky Way
 
 // --- Waving Foliage & Water Waves ---
 #define ENABLE_WAVING_FOLIAGE           // Waving leaves, grass, crops
 #define WAVING_SPEED 1.0                // [0.5 1.0 1.5 2.0]
 #define WATER_WAVE_STRENGTH 0.85        // [0.0 0.5 0.85 1.2]
 
-// --- Post-Processing & Cinematic Grading ---
+// --- Post-Processing, Night Sparkle Glare & Cinematic Grading ---
+#define ENABLE_BLOOM_AND_SPARKLE        // HDR Bloom & 4-Point Cross-Star Sparkle Glare
+#define BLOOM_INTENSITY 1.15            // [0.0 0.5 0.8 1.0 1.15 1.5 2.0]
+#define SPARKLE_INTENSITY 1.30          // [0.0 0.5 0.8 1.0 1.30 1.6 2.0]
 #define ENABLE_FXAA                     // Fast Approximate Anti-Aliasing
 #define CAS_SHARPENING 0.45             // [0.0 0.2 0.35 0.45 0.8]
 #define CINEMATIC_CONTRAST 1.12         // [0.95 1.00 1.06 1.12 1.20]
-#define CINEMATIC_SATURATION 1.10       // [0.85 1.00 1.10 1.20]
+#define CINEMATIC_SATURATION 1.12       // [0.85 1.00 1.12 1.20]
 #define SHADOW_TOE_LIFT 0.002           // [0.000 0.002 0.005 0.010 0.020] Subtle toe without milky haze
 
 #endif // SETTINGS_GLSL
