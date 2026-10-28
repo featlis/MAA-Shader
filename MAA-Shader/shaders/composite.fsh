@@ -192,7 +192,7 @@ void main() {
 
     // 6. Emissive Surface Radiance (Directly on Emitter OR Transmitted Through Translucent Glass!)
     float viewDist = length(viewPos);
-    float nightJewelBoost = 1.0 + smoothstep(10.0, 64.0, viewDist) * (0.45 + atm.nightFactor * 0.75);
+    float nightJewelBoost = 1.0 + smoothstep(8.0, 58.0, viewDist) * (0.52 + atm.nightFactor * 0.85);
 
     vec3 emissiveRadiance = vec3(0.0);
     if (emission > 0.01) {
@@ -201,7 +201,8 @@ void main() {
                        isMaterial(matId, MAT_EMISSIVE_SOUL) ||
                        isMaterial(matId, MAT_EMISSIVE_LAVA);
         float emitterShimmer = computeLightShimmer(worldPos, viewDist, frameTimeCounter, isFlame);
-        emissiveRadiance = mix(albedoLinear, albedoLinear * eTint * 1.35, 0.65) * emission * 2.85 * emitterShimmer * nightJewelBoost;
+        float coreSparkle = 1.0 + pow(emission, 2.4) * 0.45;
+        emissiveRadiance = mix(albedoLinear, albedoLinear * eTint * 1.35, 0.65) * emission * 2.95 * coreSparkle * emitterShimmer * nightJewelBoost;
     } else if (isTranslucent && isEmissiveMaterial(opaqueMatId)) {
         // An emissive light block (e.g. Sea Lantern, Glowstone, Flame) is directly behind Stained/Clear Glass:
         // Preserve the background emitter's inner texture & dark border frame while optically tinting by the glass!

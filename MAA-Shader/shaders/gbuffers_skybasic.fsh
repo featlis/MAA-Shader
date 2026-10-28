@@ -52,10 +52,12 @@ vec3 sampleStarLayer(vec3 celDir, float gridScale, float densityThreshold, float
     // Dynamic atmospheric scintillation / twinkling
     float phase = rnd.y * 62.83 + rnd.z * 31.41;
     float freq  = 3.0 + rnd.x * 5.0;
-    float twinkle = 0.72 + 0.38 * sin(time * freq + phase) * cos(time * (freq * 0.63) - phase * 0.7);
+    float twinkle = 0.68 + 0.44 * sin(time * freq + phase) * cos(time * (freq * 0.63) - phase * 0.7);
     float mag = smoothstep(densityThreshold, 1.0, h);
+    // Top ~12% 1st-magnitude stars get a jewel boost so only rare bright stars catch a delicate diamond glint
+    float jewelStar = smoothstep(0.84, 0.99, mag);
 
-    return starCol * (core * core * (0.55 + mag * 1.10) * max(twinkle, 0.25));
+    return starCol * (core * core * (0.62 + mag * 1.15 + jewelStar * 1.10) * max(twinkle, 0.25));
 }
 
 void main() {
@@ -118,7 +120,7 @@ void main() {
             vec3 totalStars = (stars1 + stars2) * horizonMask * atm.nightFactor * clearSky * STAR_SPARKLE_INTENSITY;
 
             skyColor += totalStars;
-            starEmission = clamp(getLuminance(totalStars) * 0.45, 0.0, 0.55);
+            starEmission = clamp(smoothstep(0.50, 1.55, getLuminance(totalStars)) * 0.68, 0.0, 0.68);
         }
     }
 

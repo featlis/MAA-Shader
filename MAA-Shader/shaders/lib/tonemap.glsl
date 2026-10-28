@@ -21,13 +21,22 @@ const vec2 BLOOM_DIRS[8] = vec2[8](
 // Extracts only genuine HDR emitters & bright specular glints (zero haze on normal terrain!)
 vec3 extractHDRBrightPass(vec3 hdrColor, float emission) {
     float luma = getLuminance(hdrColor);
-    float excess = max(luma - 0.92, 0.0) + max(emission - 0.15, 0.0) * 0.65;
+    float excess = max(luma - 0.85, 0.0) + max(emission - 0.12, 0.0) * 0.75;
     if (excess <= 0.001) return vec3(0.0);
 
-    float softKnee = (excess * excess) / (0.75 + excess * excess);
-    vec3 saturated = max(mix(vec3(luma), hdrColor, 1.22), vec3(0.0));
-    vec3 compressed = saturated / (1.0 + luma * 0.35);
+    float softKnee = (excess * excess) / (0.65 + excess * excess);
+    vec3 saturated = max(mix(vec3(luma), hdrColor, 1.25), vec3(0.0));
+    vec3 compressed = saturated / (1.0 + luma * 0.32);
     return compressed * softKnee;
+}
+
+// Scale-invariant 3D depth occlusion check:
+// In perspective projection, (1.0 - depth) is proportional to (1.0 / linearDistance).
+// Returns true if sampleDepth is in the sky behind a foreground block, OR > 22% farther in 3D distance than centerDepth!
+bool isSampleOccludedByForeground(float centerDepth, float sampleDepth, bool centerIsForeground) {
+    if (!centerIsForeground) return false;
+    if (sampleDepth >= 0.9999) return true;
+    return (1.0 - centerDepth) > (1.0 - sampleDepth) * 1.22;
 }
 
 vec3 computeHDRBloomAndSparkle(
@@ -45,44 +54,55 @@ vec3 computeHDRBloomAndSparkle(
     float centerDepth = texture(depthTex, uv).r;
     bool centerIsForeground = (centerDepth < 0.9999);
 
-    // 1. Contiguous 2-Ring Depth-Occluded Gaussian Bloom (1.15px & 2.35px, zero floating dots!)
+    // 1. Contiguous 3-Ring Depth-Occluded Gaussian Bloom (1.15px, 2.30px & 3.55px, zero floating dots!)
     vec3 bloomAccum = vec3(0.0);
     float bloomWeightSum = 0.001;
 
     if (BLOOM_INTENSITY > 0.001) {
         vec3 centerCol = texture(hdrTex, uv).rgb;
         float centerEmit = texture(matSpecTex, uv).b;
-        bloomAccum += extractHDRBrightPass(centerCol, centerEmit) * 0.25;
-        bloomWeightSum += 0.25;
+        bloomAccum += extractHDRBrightPass(centerCol, centerEmit) * 0.26;
+        bloomWeightSum += 0.26;
 
         for (int i = 0; i < 8; i++) {
             vec2 dir = BLOOM_DIRS[i] * texelSize;
 
-            // Inner contiguous ring (1.15px)
+            // Ring 1 (1.15px)
             vec2 uv1 = clamp(uv + dir * 1.15, vec2(0.002), vec2(0.998));
             float d1 = texture(depthTex, uv1).r;
-            // Prevent background lights or stars from bleeding through foreground blocks
-            if (!centerIsForeground || d1 <= centerDepth + 0.0006) {
+            bool occ1 = isSampleOccludedByForeground(centerDepth, d1, centerIsForeground);
+            if (!occ1) {
                 vec3 c1 = texture(hdrTex, uv1).rgb;
                 float e1 = texture(matSpecTex, uv1).b;
                 bloomAccum += extractHDRBrightPass(c1, e1) * 0.18;
                 bloomWeightSum += 0.18;
             }
 
-            // Outer contiguous ring (2.35px)
-            vec2 uv2 = clamp(uv + dir * 2.35, vec2(0.002), vec2(0.998));
+            // Ring 2 (2.30px)
+            vec2 uv2 = clamp(uv + dir * 2.30, vec2(0.002), vec2(0.998));
             float d2 = texture(depthTex, uv2).r;
-            if (!centerIsForeground || (d1 <= centerDepth + 0.0006 && d2 <= centerDepth + 0.0008)) {
+            bool occ2 = occ1 || isSampleOccludedByForeground(centerDepth, d2, centerIsForeground);
+            if (!occ2) {
                 vec3 c2 = texture(hdrTex, uv2).rgb;
                 float e2 = texture(matSpecTex, uv2).b;
-                bloomAccum += extractHDRBrightPass(c2, e2) * 0.08;
-                bloomWeightSum += 0.08;
+                bloomAccum += extractHDRBrightPass(c2, e2) * 0.10;
+                bloomWeightSum += 0.10;
+            }
+
+            // Ring 3 (3.55px)
+            vec2 uv3 = clamp(uv + dir * 3.55, vec2(0.002), vec2(0.998));
+            float d3 = texture(depthTex, uv3).r;
+            if (!occ2 && !isSampleOccludedByForeground(centerDepth, d3, centerIsForeground)) {
+                vec3 c3 = texture(hdrTex, uv3).rgb;
+                float e3 = texture(matSpecTex, uv3).b;
+                bloomAccum += extractHDRBrightPass(c3, e3) * 0.05;
+                bloomWeightSum += 0.05;
             }
         }
-        bloomAccum = (bloomAccum / bloomWeightSum) * (0.20 * BLOOM_INTENSITY);
+        bloomAccum = (bloomAccum / bloomWeightSum) * (0.28 * BLOOM_INTENSITY);
     }
 
-    // 2. Contiguous 1-Pixel-Step Depth-Occluded Pinpoint Micro-Glint (1px to 3px, zero dotted lines!)
+    // 2. Contiguous 1.12px-Step Depth-Occluded Crystal Glint (up to ~6.7px, zero dotted lines, zero wall bleed!)
     vec3 sparkleAccum = vec3(0.0);
     if (SPARKLE_INTENSITY > 0.001) {
         const vec2 STAR_AXES[4] = vec2[4](
@@ -96,13 +116,13 @@ vec3 computeHDRBloomAndSparkle(
             vec2 axisDir = STAR_AXES[a] * texelSize;
             vec3 axisSum = vec3(0.0);
 
-            for (int s = 1; s <= 3; s++) {
-                float stepPx = float(s);
+            for (int s = 1; s <= 6; s++) {
+                float stepPx = float(s) * 1.12;
                 vec2 sUV = clamp(uv + axisDir * stepPx, vec2(0.002), vec2(0.998));
                 float sDepth = texture(depthTex, sUV).r;
 
                 // Stop immediately if a foreground block occludes the ray (never draw lines through blocks!)
-                if (centerIsForeground && sDepth > centerDepth + 0.0005) {
+                if (isSampleOccludedByForeground(centerDepth, sDepth, centerIsForeground)) {
                     break;
                 }
 
@@ -110,22 +130,22 @@ vec3 computeHDRBloomAndSparkle(
                 float sLuma = getLuminance(sCol);
                 float sEmit = texture(matSpecTex, sUV).b;
 
-                float spikeTrigger = max(sLuma - 1.45, 0.0) + max(sEmit - 0.55, 0.0) * 0.85;
-                if (spikeTrigger > 0.08) {
-                    float spikeMask = (spikeTrigger * spikeTrigger) / (1.10 + spikeTrigger * spikeTrigger);
-                    float fs = float(s) / 3.0;
-                    float falloff = exp(-fs * 2.2);
+                float spikeTrigger = max(sLuma - 1.12, 0.0) + max(sEmit - 0.42, 0.0) * 1.10;
+                if (spikeTrigger > 0.05) {
+                    float spikeMask = (spikeTrigger * spikeTrigger) / (0.85 + spikeTrigger * spikeTrigger);
+                    float fs = float(s) / 6.0;
+                    float falloff = exp(-fs * 2.15) * (1.0 - fs * 0.35);
                     float spatialSeed = dot(floor(sUV * 320.0), vec2(1.73, 2.91));
-                    float rayShimmer = 0.85 + 0.20 * sin(time * 5.2 + spatialSeed + float(a) * 1.57);
+                    float rayShimmer = 0.82 + 0.26 * sin(time * 5.2 + spatialSeed + float(a) * 1.57);
 
-                    vec3 clampedSpikeCol = max(mix(vec3(sLuma), sCol, 1.25), vec3(0.0)) / (1.0 + sLuma * 0.35);
-                    axisSum += clampedSpikeCol * (spikeMask * falloff * rayShimmer * 0.35);
+                    vec3 clampedSpikeCol = max(mix(vec3(sLuma), sCol, 1.28), vec3(0.0)) / (1.0 + sLuma * 0.32);
+                    axisSum += clampedSpikeCol * (spikeMask * falloff * rayShimmer * 0.36);
                 }
             }
             sparkleAccum += axisSum;
         }
-        sparkleAccum *= (0.16 * SPARKLE_INTENSITY);
-        sparkleAccum /= (1.0 + getLuminance(sparkleAccum) * 0.85);
+        sparkleAccum *= (0.30 * SPARKLE_INTENSITY);
+        sparkleAccum /= (1.0 + getLuminance(sparkleAccum) * 0.75);
     }
 
     return bloomAccum + sparkleAccum;
