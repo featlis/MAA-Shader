@@ -4,39 +4,36 @@
 #include "/lib/common.glsl"
 
 // ============================================================================
-// Nightscape HDR Bloom & 4-Point Optical Cross-Star Sparkle Glare
+// Contiguous Depth-Occluded HDR Bloom & Pinpoint Micro-Glint
+// (Zero floating dots, zero lines bleeding through foreground blocks!)
 // ============================================================================
-const vec2 BLOOM_SPIRAL[12] = vec2[12](
+const vec2 BLOOM_DIRS[8] = vec2[8](
     vec2( 1.0000,  0.0000),
-    vec2(-0.7374,  0.6755),
-    vec2( 0.0874, -0.9962),
-    vec2( 0.6068,  0.7949),
-    vec2(-0.9646, -0.2636),
-    vec2( 0.8899, -0.4562),
-    vec2(-0.3525,  0.9358),
-    vec2(-0.3717, -0.9284),
-    vec2( 0.8996,  0.4367),
-    vec2(-0.9587,  0.2845),
-    vec2( 0.5904, -0.8071),
-    vec2( 0.1080,  0.9942)
+    vec2( 0.7071,  0.7071),
+    vec2( 0.0000,  1.0000),
+    vec2(-0.7071,  0.7071),
+    vec2(-1.0000,  0.0000),
+    vec2(-0.7071, -0.7071),
+    vec2( 0.0000, -1.0000),
+    vec2( 0.7071, -0.7071)
 );
 
 // Extracts only genuine HDR emitters & bright specular glints (zero haze on normal terrain!)
 vec3 extractHDRBrightPass(vec3 hdrColor, float emission) {
     float luma = getLuminance(hdrColor);
-    float excess = max(luma - 0.82, 0.0) + emission * 0.75;
+    float excess = max(luma - 0.92, 0.0) + max(emission - 0.15, 0.0) * 0.65;
     if (excess <= 0.001) return vec3(0.0);
 
-    float softKnee = (excess * excess) / (0.60 + excess * excess);
-    // Enrich chroma of blooming light while preventing firefly blowouts
-    vec3 saturated = max(mix(vec3(luma), hdrColor, 1.32), vec3(0.0));
-    vec3 compressed = saturated / (1.0 + luma * 0.22);
+    float softKnee = (excess * excess) / (0.75 + excess * excess);
+    vec3 saturated = max(mix(vec3(luma), hdrColor, 1.22), vec3(0.0));
+    vec3 compressed = saturated / (1.0 + luma * 0.35);
     return compressed * softKnee;
 }
 
 vec3 computeHDRBloomAndSparkle(
     sampler2D hdrTex,
     sampler2D matSpecTex,
+    sampler2D depthTex,
     vec2 uv,
     vec2 texelSize,
     float time
@@ -45,31 +42,49 @@ vec3 computeHDRBloomAndSparkle(
     return vec3(0.0);
     #endif
 
-    // 1. Multi-Radius Golden-Spiral Colored HDR Bloom (12 taps, 2.5px to 22px)
+    float centerDepth = texture(depthTex, uv).r;
+    bool centerIsForeground = (centerDepth < 0.9999);
+
+    // 1. Contiguous 2-Ring Depth-Occluded Gaussian Bloom (1.15px & 2.35px, zero floating dots!)
     vec3 bloomAccum = vec3(0.0);
-    float bloomWeightSum = 0.0;
+    float bloomWeightSum = 0.001;
 
     if (BLOOM_INTENSITY > 0.001) {
-        for (int i = 0; i < 12; i++) {
-            float fi = (float(i) + 0.5) / 12.0;
-            float radiusPx = mix(2.5, 22.0, fi * fi * 0.65 + fi * 0.35);
-            vec2 sampleUV = clamp(uv + BLOOM_SPIRAL[i] * texelSize * radiusPx, vec2(0.002), vec2(0.998));
+        vec3 centerCol = texture(hdrTex, uv).rgb;
+        float centerEmit = texture(matSpecTex, uv).b;
+        bloomAccum += extractHDRBrightPass(centerCol, centerEmit) * 0.25;
+        bloomWeightSum += 0.25;
 
-            vec3 sColor = texture(hdrTex, sampleUV).rgb;
-            float sEmit = texture(matSpecTex, sampleUV).b;
-            vec3 bright = extractHDRBrightPass(sColor, sEmit);
+        for (int i = 0; i < 8; i++) {
+            vec2 dir = BLOOM_DIRS[i] * texelSize;
 
-            float w = exp(-fi * 2.1);
-            bloomAccum += bright * w;
-            bloomWeightSum += w;
+            // Inner contiguous ring (1.15px)
+            vec2 uv1 = clamp(uv + dir * 1.15, vec2(0.002), vec2(0.998));
+            float d1 = texture(depthTex, uv1).r;
+            // Prevent background lights or stars from bleeding through foreground blocks
+            if (!centerIsForeground || d1 <= centerDepth + 0.0006) {
+                vec3 c1 = texture(hdrTex, uv1).rgb;
+                float e1 = texture(matSpecTex, uv1).b;
+                bloomAccum += extractHDRBrightPass(c1, e1) * 0.18;
+                bloomWeightSum += 0.18;
+            }
+
+            // Outer contiguous ring (2.35px)
+            vec2 uv2 = clamp(uv + dir * 2.35, vec2(0.002), vec2(0.998));
+            float d2 = texture(depthTex, uv2).r;
+            if (!centerIsForeground || (d1 <= centerDepth + 0.0006 && d2 <= centerDepth + 0.0008)) {
+                vec3 c2 = texture(hdrTex, uv2).rgb;
+                float e2 = texture(matSpecTex, uv2).b;
+                bloomAccum += extractHDRBrightPass(c2, e2) * 0.08;
+                bloomWeightSum += 0.08;
+            }
         }
-        bloomAccum = (bloomAccum / max(bloomWeightSum, 0.001)) * (0.28 * BLOOM_INTENSITY);
+        bloomAccum = (bloomAccum / bloomWeightSum) * (0.20 * BLOOM_INTENSITY);
     }
 
-    // 2. 4-Point Optical Cross-Star Sparkle Glare (Night Lights, Stars, Water & Metal Glints)
+    // 2. Contiguous 1-Pixel-Step Depth-Occluded Pinpoint Micro-Glint (1px to 3px, zero dotted lines!)
     vec3 sparkleAccum = vec3(0.0);
     if (SPARKLE_INTENSITY > 0.001) {
-        // Classic 18-degree tilted cinema cross-star axes
         const vec2 STAR_AXES[4] = vec2[4](
             vec2( 0.9511,  0.3090),
             vec2(-0.9511, -0.3090),
@@ -79,39 +94,38 @@ vec3 computeHDRBloomAndSparkle(
 
         for (int a = 0; a < 4; a++) {
             vec2 axisDir = STAR_AXES[a] * texelSize;
-            vec3 axisPeak = vec3(0.0);
-            vec3 axisSum  = vec3(0.0);
+            vec3 axisSum = vec3(0.0);
 
-            for (int s = 1; s <= 5; s++) {
-                float fs = float(s) / 5.0;
-                float stepPx = mix(1.8, 28.0, fs * fs * 0.55 + fs * 0.45);
+            for (int s = 1; s <= 3; s++) {
+                float stepPx = float(s);
                 vec2 sUV = clamp(uv + axisDir * stepPx, vec2(0.002), vec2(0.998));
+                float sDepth = texture(depthTex, sUV).r;
+
+                // Stop immediately if a foreground block occludes the ray (never draw lines through blocks!)
+                if (centerIsForeground && sDepth > centerDepth + 0.0005) {
+                    break;
+                }
 
                 vec3 sCol = texture(hdrTex, sUV).rgb;
                 float sLuma = getLuminance(sCol);
                 float sEmit = texture(matSpecTex, sUV).b;
 
-                // Trigger diffraction spikes on bright point lights, stars, and intense specular glints
-                float spikeTrigger = max(sLuma - 1.05, 0.0) + sEmit * 1.10;
-                if (spikeTrigger > 0.05) {
-                    float spikeMask = (spikeTrigger * spikeTrigger) / (0.75 + spikeTrigger * spikeTrigger);
-                    // Subtle optical chromatic dispersion & temporal twinkling along the spike ray
-                    vec3 dispersionTint = mix(vec3(1.10, 0.98, 0.88), vec3(0.84, 0.96, 1.16), fs);
+                float spikeTrigger = max(sLuma - 1.45, 0.0) + max(sEmit - 0.55, 0.0) * 0.85;
+                if (spikeTrigger > 0.08) {
+                    float spikeMask = (spikeTrigger * spikeTrigger) / (1.10 + spikeTrigger * spikeTrigger);
+                    float fs = float(s) / 3.0;
+                    float falloff = exp(-fs * 2.2);
                     float spatialSeed = dot(floor(sUV * 320.0), vec2(1.73, 2.91));
-                    float rayShimmer = 0.78 + 0.34 * sin(time * 5.8 + spatialSeed + float(a) * 1.57);
+                    float rayShimmer = 0.85 + 0.20 * sin(time * 5.2 + spatialSeed + float(a) * 1.57);
 
-                    vec3 clampedSpikeCol = max(mix(vec3(sLuma), sCol, 1.38), vec3(0.0)) / (1.0 + sLuma * 0.22);
-                    float falloff = exp(-fs * 2.15);
-                    vec3 sampleRay = clampedSpikeCol * dispersionTint * (spikeMask * falloff * rayShimmer);
-
-                    axisPeak = max(axisPeak, sampleRay);
-                    axisSum += sampleRay * 0.25;
+                    vec3 clampedSpikeCol = max(mix(vec3(sLuma), sCol, 1.25), vec3(0.0)) / (1.0 + sLuma * 0.35);
+                    axisSum += clampedSpikeCol * (spikeMask * falloff * rayShimmer * 0.35);
                 }
             }
-            sparkleAccum += (axisPeak * 0.75 + axisSum * 0.25);
+            sparkleAccum += axisSum;
         }
-        sparkleAccum *= (0.24 * SPARKLE_INTENSITY);
-        sparkleAccum /= (1.0 + getLuminance(sparkleAccum) * 0.65);
+        sparkleAccum *= (0.16 * SPARKLE_INTENSITY);
+        sparkleAccum /= (1.0 + getLuminance(sparkleAccum) * 0.85);
     }
 
     return bloomAccum + sparkleAccum;

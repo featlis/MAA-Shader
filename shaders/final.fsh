@@ -29,10 +29,10 @@ void main() {
         float blockLight = texture(colortex1, vTexCoord).b;
         float matId = texture(colortex2, vTexCoord).a;
 
-        // Thermal shimmer near lava/fire or on distant lit surfaces (> 24m)
-        float lavaHeat = isMaterial(matId, MAT_EMISSIVE_LAVA) ? 1.0 : smoothstep(0.78, 0.98, blockLight) * 0.45;
-        float distShimmer = smoothstep(24.0, 96.0, linDepth) * (0.35 + blockLight * 0.65);
-        float hazeStrength = clamp((lavaHeat * 0.85 + distShimmer * 0.55) * DISTANT_LIGHT_SHIMMER, 0.0, 1.2);
+        // Thermal shimmer ONLY on actual lava or very distant horizons (> 36m), never warping nearby blocks/glass
+        float lavaHeat = isMaterial(matId, MAT_EMISSIVE_LAVA) ? 1.0 : 0.0;
+        float distShimmer = smoothstep(36.0, 110.0, linDepth) * (0.25 + blockLight * 0.55);
+        float hazeStrength = clamp((lavaHeat * 0.80 + distShimmer * 0.45) * DISTANT_LIGHT_SHIMMER, 0.0, 1.0);
 
         if (hazeStrength > 0.01) {
             vec2 waveCoord = vTexCoord * vec2(viewWidth, viewHeight) * 0.06;
@@ -40,7 +40,7 @@ void main() {
             vec2 offset = vec2(
                 sin(waveCoord.y * 1.7 + t + cos(waveCoord.x * 1.3 - t * 0.8)),
                 cos(waveCoord.x * 1.5 - t * 1.1 + sin(waveCoord.y * 1.9 + t * 0.7))
-            ) * texelSize * (0.55 * hazeStrength);
+            ) * texelSize * (0.45 * hazeStrength);
 
             vec2 candidateUV = clamp(vTexCoord + offset, vec2(0.002), vec2(0.998));
             float candidateDepth = texture(depthtex0, candidateUV).r;
@@ -55,8 +55,8 @@ void main() {
     // 2. Sample HDR image with FXAA + CAS sharpening
     vec3 hdrColor = applyFXAAAndCAS(colortex7, sampleUV, texelSize);
 
-    // 3. Add Optical HDR Bloom & 4-Point Cross-Star Sparkle Glare (Night Lights, Stars, Specular Glints)
-    vec3 bloomAndSparkle = computeHDRBloomAndSparkle(colortex7, colortex2, sampleUV, texelSize, frameTimeCounter);
+    // 3. Add Contiguous Depth-Occluded HDR Bloom & Micro-Glint
+    vec3 bloomAndSparkle = computeHDRBloomAndSparkle(colortex7, colortex2, depthtex0, sampleUV, texelSize, frameTimeCounter);
     hdrColor += bloomAndSparkle;
 
     // 4. Dynamic Eye Adaptation (Smooth Auto-Exposure without washing out shadows)

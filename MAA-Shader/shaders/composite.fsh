@@ -96,9 +96,9 @@ void main() {
     float matId = c2.a;
     float opaqueMatId = opaqueBg.a;
 
-    // Sky pass-through (preserve HDR star & sun/moon sparkle emission stored in c2.b)
+    // Sky pass-through (preserve subtle star emission stored in c2.b)
     if (depth >= 0.9999) {
-        vec3 skyHDR = albedoLinear * (1.0 + c2.b * 3.2);
+        vec3 skyHDR = albedoLinear * (1.0 + c2.b * 0.55);
         gl_FragData[0] = vec4(skyHDR, 1.0);
         return;
     }
@@ -174,7 +174,7 @@ void main() {
     // 4. Directional Blocklight, Tube Occlusion & Stained Glass Transmission
     BlocklightResult blk = computeDirectionalBlocklight(
         viewPos, worldPos, viewNormal, vTexCoord, albedoLinear,
-        blockLight, smoothness, f0, matId, frameTimeCounter,
+        blockLight, smoothness, f0, matId, frameTimeCounter, dither,
         colortex0, colortex1, colortex2, colortex6, colortex7, depthtex0, depthtex1,
         gbufferProjection, gbufferProjectionInverse
     );
@@ -191,9 +191,8 @@ void main() {
     );
 
     // 6. Emissive Surface Radiance (Directly on Emitter OR Transmitted Through Translucent Glass!)
-    // Includes Nightscape Jewel Boost so distant torches/lanterns/village lights sparkle vividly at night
     float viewDist = length(viewPos);
-    float nightJewelBoost = 1.0 + smoothstep(6.0, 56.0, viewDist) * (0.65 + atm.nightFactor * 1.15);
+    float nightJewelBoost = 1.0 + smoothstep(10.0, 64.0, viewDist) * (0.45 + atm.nightFactor * 0.75);
 
     vec3 emissiveRadiance = vec3(0.0);
     if (emission > 0.01) {
@@ -202,19 +201,26 @@ void main() {
                        isMaterial(matId, MAT_EMISSIVE_SOUL) ||
                        isMaterial(matId, MAT_EMISSIVE_LAVA);
         float emitterShimmer = computeLightShimmer(worldPos, viewDist, frameTimeCounter, isFlame);
-        emissiveRadiance = mix(albedoLinear, albedoLinear * eTint * 1.45, 0.72) * emission * 3.8 * emitterShimmer * nightJewelBoost;
+        emissiveRadiance = mix(albedoLinear, albedoLinear * eTint * 1.35, 0.65) * emission * 2.85 * emitterShimmer * nightJewelBoost;
     } else if (isTranslucent && isEmissiveMaterial(opaqueMatId)) {
-        // An emissive light block (e.g. Sea Lantern, Torch, Glowstone) is directly behind Stained/Clear Glass!
+        // An emissive light block (e.g. Sea Lantern, Glowstone, Flame) is directly behind Stained/Clear Glass:
+        // Preserve the background emitter's inner texture & dark border frame while optically tinting by the glass!
         vec3 bgAlbedoLinear = toLinear(opaqueBg.rgb);
+        float bgLuma = getLuminance(bgAlbedoLinear);
+        float bgEmitMask = clamp(smoothstep(0.24, 0.80, bgLuma) * 0.88 + 0.08, 0.08, 1.0);
         vec3 bgEmitTint = getEmissiveColorFromMatAndTex(opaqueMatId, bgAlbedoLinear, 1.0);
         float emitterShimmer = computeLightShimmer(worldPos, viewDist, frameTimeCounter, false);
+        vec3 rawBgGlow = mix(bgAlbedoLinear, bgAlbedoLinear * bgEmitTint * 1.25, 0.58) * bgEmitMask;
 
         if (isMaterial(matId, MAT_STAINED_GLASS)) {
-            vec3 pureGlassLinear = toLinear(texture(colortex6, vTexCoord).rgb);
-            vec3 tintedGlow = tintLightByStainedGlass(bgEmitTint, pureGlassLinear, 0.94);
-            emissiveRadiance = mix(pureGlassLinear, tintedGlow, 0.65) * 2.05 * emitterShimmer * nightJewelBoost;
+            vec4 glassData = texture(colortex6, vTexCoord);
+            vec3 pureGlassLinear = toLinear(glassData.rgb);
+            float glassAlpha = glassData.a;
+            vec3 tintedGlow = tintLightByStainedGlass(rawBgGlow, pureGlassLinear, 0.82) * bgEmitMask;
+            // Attenuate along the stained glass frame so both the glass frame and the Sea Lantern panels stay crisp
+            emissiveRadiance = mix(rawBgGlow * pureGlassLinear, tintedGlow, 0.65) * (1.0 - glassAlpha * 0.48) * 1.35 * emitterShimmer;
         } else {
-            emissiveRadiance = mix(albedoLinear, bgAlbedoLinear * bgEmitTint * 1.35, 0.75) * 3.4 * emitterShimmer * nightJewelBoost;
+            emissiveRadiance = rawBgGlow * 2.10 * emitterShimmer;
         }
     }
 
@@ -230,5 +236,7 @@ void main() {
                      + foliageRim
                      + emissiveRadiance;
 
-    gl_FragData[0] = vec4(max(totalDirect, vec3(0.0)), blk.directionalOcclusion);
+    // Store emissiveFlag in alpha so SSGI never re-bounces direct HDR emitters into 4-ray blobs on grass
+    float emissiveFlag = (emission > 0.01 || (isTranslucent && isEmissiveMaterial(opaqueMatId))) ? 1.0 : 0.0;
+    gl_FragData[0] = vec4(max(totalDirect, vec3(0.0)), emissiveFlag);
 }

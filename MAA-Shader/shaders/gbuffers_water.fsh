@@ -73,13 +73,13 @@ void main() {
         f0 = 0.05;
         matId = MAT_WATER;
     } else if (vBlockId == 10009) {
-        // Stained Glass & Panes: enrich chromatic saturation and store pure unblended color in colortex6
+        // Stained Glass & Panes: preserve crystal-clear translucency on pane interior and crisp border frame
         float luma = getLuminance(albedo.rgb);
         float maxC = max(albedo.r, max(albedo.g, albedo.b));
         vec3 normChroma = (maxC > 0.02) ? (albedo.rgb / maxC) : vec3(0.8);
-        pureTranslucentColor = clamp(mix(vec3(getLuminance(normChroma)), normChroma, 1.45), vec3(0.04), vec3(1.0));
-        albedo.rgb = clamp(mix(vec3(luma), albedo.rgb, 1.40), vec3(0.03), vec3(1.0));
-        outAlpha = clamp(albedo.a * 0.65, 0.25, 0.72);
+        pureTranslucentColor = clamp(mix(vec3(getLuminance(normChroma)), normChroma, 1.35), vec3(0.05), vec3(1.0));
+        albedo.rgb = clamp(mix(vec3(luma), albedo.rgb, 1.25), vec3(0.04), vec3(1.0));
+        outAlpha = clamp(albedo.a * 0.46, 0.14, 0.54);
         smoothness = 0.90;
         f0 = 0.05;
         matId = MAT_STAINED_GLASS;

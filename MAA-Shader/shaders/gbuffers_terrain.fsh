@@ -47,26 +47,45 @@ void main() {
         smoothness = 0.88;
         f0 = 0.05;
     } else if (vBlockId == 10100) {
-        matId = MAT_EMISSIVE_WARM;
-        emission = clamp(smoothstep(0.22, 0.80, luma) * 0.92 + 0.12, 0.25, 1.0);
+        // Flame Torch, Lantern, Campfire, Fire, Candle:
+        // Only the glowing flame/ember texels are emissive; wooden campfire logs, torch sticks & iron lantern frames stay non-emissive terrain!
+        bool isFlameCore = (luma > 0.46 && albedo.r > albedo.b * 1.25) || (luma > 0.68);
+        if (isFlameCore) {
+            matId = MAT_EMISSIVE_WARM;
+            emission = clamp(smoothstep(0.42, 0.85, luma) * 0.90 + 0.15, 0.20, 1.0);
+        }
     } else if (vBlockId == 10106) {
-        matId = MAT_EMISSIVE_GOLD;
-        emission = clamp(smoothstep(0.20, 0.78, luma) * 0.92 + 0.18, 0.30, 1.0);
+        // Glowstone, Shroomlight, Jack o'Lantern, Ochre Froglight, Copper Bulb
+        if (vLmCoord.x > 0.55 && luma > 0.30) {
+            matId = MAT_EMISSIVE_GOLD;
+            emission = clamp(smoothstep(0.28, 0.80, luma) * 0.90 + 0.10, 0.10, 1.0);
+        }
     } else if (vBlockId == 10101) {
-        matId = MAT_EMISSIVE_SOUL;
-        emission = clamp(smoothstep(0.18, 0.75, max(albedo.b, luma)) * 0.92 + 0.15, 0.25, 1.0);
+        // Soul Torch, Soul Lantern, Soul Campfire, Soul Fire:
+        // Only the cyan-blue soul flame/ember texels are emissive; wooden campfire logs & lantern frames stay non-emissive terrain!
+        bool isSoulCore = (albedo.b > 0.40 && albedo.b > albedo.r * 1.15) || (luma > 0.65);
+        if (isSoulCore) {
+            matId = MAT_EMISSIVE_SOUL;
+            emission = clamp(smoothstep(0.35, 0.80, max(albedo.b, luma)) * 0.90 + 0.15, 0.20, 1.0);
+        }
     } else if (vBlockId == 10102) {
-        matId = MAT_EMISSIVE_RED;
-        emission = clamp(smoothstep(0.18, 0.72, albedo.r) * 0.92 + 0.15, 0.25, 1.0);
+        // Redstone Torch, Redstone Block, Redstone Lamp, Redstone Wire
+        if (vLmCoord.x > 0.45 && (albedo.r > 0.42 || luma > 0.55)) {
+            matId = MAT_EMISSIVE_RED;
+            emission = clamp(smoothstep(0.30, 0.78, albedo.r) * 0.90 + 0.12, 0.15, 1.0);
+        }
     } else if (vBlockId == 10103) {
         matId = MAT_EMISSIVE_LAVA;
-        emission = clamp(smoothstep(0.12, 0.70, albedo.r) * 0.95 + 0.20, 0.35, 1.0);
+        emission = clamp(smoothstep(0.15, 0.72, albedo.r) * 0.92 + 0.18, 0.25, 1.0);
     } else if (vBlockId == 10104) {
+        // Sea Lantern, Conduit, Verdant Froglight: preserve dark outer frame contrast
         matId = MAT_EMISSIVE_AQUA;
-        emission = clamp(smoothstep(0.25, 0.80, max(albedo.g, luma)) * 0.92 + 0.22, 0.35, 1.0);
+        emission = clamp(smoothstep(0.28, 0.82, max(albedo.g, luma)) * 0.92 + 0.08, 0.08, 1.0);
     } else if (vBlockId == 10105) {
-        matId = MAT_EMISSIVE_END;
-        emission = clamp(smoothstep(0.20, 0.80, max(albedo.b, luma)) * 0.92 + 0.18, 0.30, 1.0);
+        if (luma > 0.32 || albedo.b > 0.40) {
+            matId = MAT_EMISSIVE_END;
+            emission = clamp(smoothstep(0.28, 0.80, max(albedo.b, luma)) * 0.90 + 0.12, 0.12, 1.0);
+        }
     } else if (vBlockId == 10200) {
         matId = MAT_METALLIC;
         smoothness = clamp(0.84 + luma * 0.12, 0.84, 0.96);

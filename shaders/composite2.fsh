@@ -121,11 +121,13 @@ void main() {
                       + albedoLinear * (totalAmbient + indirectBounce * ssao) * kD_env
                       + ssr.rgb;
 
-    // 4. Local Blocklight Color for Colored Fog Tinting
-    vec3 localFogLightColor = getEmissiveColorFromMatAndTex(matId, albedoLinear, blockLight);
-    if (dot(indirectBounce, indirectBounce) > 0.001) {
-        vec3 bounceChroma = indirectBounce / max(getLuminance(indirectBounce), 0.01);
-        localFogLightColor = mix(localFogLightColor, clamp(bounceChroma, vec3(0.1), vec3(1.5)), 0.55);
+    // 4. Local Blocklight Color for Colored Fog Tinting (never tint fog with terrain/smoke albedo)
+    vec3 localFogLightColor = getEmissiveColorFromMat(matId, blockLight);
+    float bounceLuma = getLuminance(indirectBounce);
+    if (bounceLuma > 0.04) {
+        vec3 bounceChroma = indirectBounce / bounceLuma;
+        float chromaBlend = smoothstep(0.04, 0.25, bounceLuma) * 0.45;
+        localFogLightColor = mix(localFogLightColor, clamp(bounceChroma, vec3(0.15), vec3(1.35)), chromaBlend);
     }
 
     // 5. Apply Colored Volumetric Fog & Sunlight Shafts

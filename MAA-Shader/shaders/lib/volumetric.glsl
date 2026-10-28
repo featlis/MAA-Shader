@@ -78,11 +78,14 @@ vec3 applyVolumetricFogAndLightShafts(
                     vec3 stepLight = vec3(1.0);
                     #ifdef SHADOW_COLORED_GLASS
                     float allD = texture(shadowTex0, sScreen.xy).r;
-                    if (sScreen.z > allD) {
-                        // Colored volumetric beam through stained glass!
+                    float glassDist = sScreen.z - allD;
+                    if (glassDist > 0.0001 && glassDist < 0.025) {
+                        // Localized colored volumetric beam through stained glass (fades smoothly behind glass)
+                        float beamFade = smoothstep(0.025, 0.002, glassDist);
                         vec4 glass = texture(shadowColor0, sScreen.xy);
-                        stepLight = getStainedGlassTransmission(toLinear(glass.rgb), glass.a) * 1.35;
-                        coloredBeamWeight += 1.0;
+                        vec3 glassTrans = getStainedGlassTransmission(toLinear(glass.rgb), glass.a) * 1.25;
+                        stepLight = mix(vec3(1.0), glassTrans, beamFade);
+                        coloredBeamWeight += beamFade;
                     }
                     #endif
                     shaftAccum += stepLight;

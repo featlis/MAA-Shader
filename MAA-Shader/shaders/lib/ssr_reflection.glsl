@@ -54,10 +54,10 @@ vec4 computeScreenSpaceReflection(
     float upDot = clamp(worldNormal.y * 0.5 + 0.5, 0.0, 1.0);
     vec3 skyFallback = mix(atm.skyHorizon, atm.skyZenith, upDot) * (skyLight * skyLight * skyLight);
 
-    // Raymarch in view space with fine, consistent steps to prevent floating ghost stickers
+    // Raymarch in view space with fine, jitter-smoothed steps to prevent floating ghost stickers
     int steps = SSR_STEPS;
-    vec3 rayPos = viewPos + viewNormal * 0.06;
     float stepLength = 0.22;
+    vec3 rayPos = viewPos + viewNormal * 0.06 + reflectDir * (stepLength * (0.25 + 0.50 * dither));
 
     vec2 hitUV = vec2(-1.0);
     float hitConfidence = 0.0;
@@ -80,10 +80,10 @@ vec4 computeScreenSpaceReflection(
         vec3 geomPos = screenToView(sc.xy, sceneDepth, projInv);
         float depthDiff = geomPos.z - rayPos.z;
 
-        // Tight 3D thickness check prevents false hits on foreground geometry
+        // Smooth 3D thickness window prevents stair-stepped contour lines on glass/water reflections
         float thickness = min(stepLength * 1.15, 0.34);
-        if (depthDiff > 0.015 && depthDiff < thickness) {
-            // 2-step binary refinement for sub-pixel reflection accuracy
+        if (depthDiff > 0.012 && depthDiff < thickness) {
+            float thickWindow = smoothstep(0.012, 0.045, depthDiff) * smoothstep(thickness, thickness * 0.35, depthDiff);
             vec3 refinedPos = rayPos - reflectDir * (stepLength * clamp(depthDiff / thickness, 0.15, 0.85));
             vec3 refinedSC = viewToScreen(refinedPos, proj);
             hitUV = refinedSC.xy;
@@ -92,7 +92,7 @@ vec4 computeScreenSpaceReflection(
             vec2 edgeDist = smoothstep(vec2(0.0), vec2(0.10), hitUV) *
                             (1.0 - smoothstep(vec2(0.90), vec2(1.0), hitUV));
             float distFade = exp(-hitDist3D * mix(0.28, 0.08, smoothness));
-            hitConfidence = edgeDist.x * edgeDist.y * distFade;
+            hitConfidence = edgeDist.x * edgeDist.y * distFade * thickWindow;
             break;
         }
     }
@@ -111,13 +111,14 @@ vec4 computeScreenSpaceReflection(
 
         // Compress extreme HDR emitter values so dielectric reflections look naturally blended into the surface
         float sampleLuma = getLuminance(ssrSample);
-        float maxCompression = isMetal ? 0.18 : 0.55;
+        float maxCompression = isMetal ? 0.22 : 0.65;
         ssrSample /= (1.0 + sampleLuma * maxCompression);
 
         reflectedColor = mix(skyFallback, ssrSample, hitConfidence);
     }
 
-    float materialBoost = isMetal ? 1.25 : 0.85;
+    bool isTranslucentGlass = isMaterial(matId, MAT_GLASS) || isMaterial(matId, MAT_STAINED_GLASS);
+    float materialBoost = isMetal ? 1.25 : (isTranslucentGlass ? 0.42 : 0.82);
     return vec4(reflectedColor * fresnelVec * SPECULAR_STRENGTH * materialBoost, fresnelScalar);
 }
 

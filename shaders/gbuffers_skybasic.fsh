@@ -38,24 +38,24 @@ vec3 sampleStarLayer(vec3 celDir, float gridScale, float densityThreshold, float
     vec3 starCenter = (rnd - 0.5) * 0.55;
     float dist = length(localPos - starCenter);
 
-    // Sharp pinpoint core + tiny optical halo
-    float core = smoothstep(0.16, 0.015, dist);
+    // Sharp pinpoint core
+    float core = smoothstep(0.10, 0.012, dist);
     if (core <= 0.001) return vec3(0.0);
 
     // Stellar blackbody color (Blue-white O/B star, Diamond A/F star, Warm K/M star)
-    vec3 coldStar = vec3(0.68, 0.84, 1.00);
+    vec3 coldStar = vec3(0.72, 0.86, 1.00);
     vec3 pureStar = vec3(0.98, 0.98, 1.00);
-    vec3 warmStar = vec3(1.00, 0.80, 0.55);
+    vec3 warmStar = vec3(1.00, 0.84, 0.62);
     vec3 starCol = (rnd.x < 0.45) ? mix(coldStar, pureStar, rnd.x * 2.2)
                                   : mix(pureStar, warmStar, (rnd.x - 0.45) * 1.8);
 
     // Dynamic atmospheric scintillation / twinkling
     float phase = rnd.y * 62.83 + rnd.z * 31.41;
-    float freq  = 3.5 + rnd.x * 6.5;
-    float twinkle = 0.65 + 0.55 * sin(time * freq + phase) * cos(time * (freq * 0.63) - phase * 0.7);
+    float freq  = 3.0 + rnd.x * 5.0;
+    float twinkle = 0.72 + 0.38 * sin(time * freq + phase) * cos(time * (freq * 0.63) - phase * 0.7);
     float mag = smoothstep(densityThreshold, 1.0, h);
 
-    return starCol * (core * core * (0.85 + mag * 1.65) * max(twinkle, 0.15));
+    return starCol * (core * core * (0.55 + mag * 1.10) * max(twinkle, 0.25));
 }
 
 void main() {
@@ -68,12 +68,12 @@ void main() {
     bool isStar = (abs(vColor.r - vColor.g) < 0.01 && abs(vColor.g - vColor.b) < 0.01 && vColor.r > 0.02 && vColor.r < 0.95);
     if (isStar) {
         float starSeed = dot(floor(worldDir * 120.0), vec3(1.37, 2.91, 4.13));
-        float twinkle = 0.75 + 0.45 * sin(frameTimeCounter * 5.8 + starSeed) * cos(frameTimeCounter * 3.7 - starSeed);
-        vec3 tint = mix(vec3(0.76, 0.88, 1.00), vec3(1.00, 0.88, 0.70), fract(starSeed * 0.37));
-        vec3 starOut = tint * pow(vColor.rgb, vec3(0.45)) * (1.55 * twinkle * STAR_SPARKLE_INTENSITY * clearSky);
+        float twinkle = 0.78 + 0.32 * sin(frameTimeCounter * 4.8 + starSeed) * cos(frameTimeCounter * 3.1 - starSeed);
+        vec3 tint = mix(vec3(0.80, 0.90, 1.00), vec3(1.00, 0.90, 0.76), fract(starSeed * 0.37));
+        vec3 starOut = tint * vColor.rgb * (1.15 * twinkle * STAR_SPARKLE_INTENSITY * clearSky);
         gl_FragData[0] = vec4(starOut, 1.0);
         gl_FragData[1] = vec4(0.5, 0.5, 0.0, 1.0);
-        gl_FragData[2] = vec4(0.0, 0.0, 0.95, MAT_SKY);
+        gl_FragData[2] = vec4(0.0, 0.0, 0.35, MAT_SKY);
         return;
     }
 
@@ -95,16 +95,10 @@ void main() {
     float sunGlowCore = pow(clamp(sunCos, 0.0, 1.0), 32.0);
     skyColor += atm.directLight * (sunGlowWide * 0.22 + sunGlowCore * 0.35) * clearSky * (1.0 - atm.nightFactor * 0.85);
 
-    // Lunar Silvery-Blue Corona & Night Sky Sparkle (Night)
+    // Night Sky Starfield & Subtle Milky Way Band
     float starEmission = 0.0;
     if (atm.nightFactor > 0.01 && clearSky > 0.01) {
-        float moonCos = dot(worldDir, -sunWorldDir);
-        float moonHalo = pow(clamp(moonCos * 0.5 + 0.5, 0.0, 1.0), 10.0);
-        float moonCore = pow(clamp(moonCos, 0.0, 1.0), 48.0);
-        skyColor += vec3(0.32, 0.50, 0.82) * (moonHalo * 0.16 + moonCore * 0.38) * atm.nightFactor * clearSky;
-
-        // Procedural Sparkling Stars & Milky Way Band above horizon
-        float horizonMask = smoothstep(0.02, 0.22, worldDir.y);
+        float horizonMask = smoothstep(0.04, 0.25, worldDir.y);
         if (horizonMask > 0.001 && STAR_SPARKLE_INTENSITY > 0.01) {
             // Build celestial coordinate frame rotating with sunWorldDir
             vec3 celZ = normalize(vec3(sunWorldDir.x, sunWorldDir.y, 0.0001));
@@ -114,17 +108,17 @@ void main() {
 
             // Subtle Milky Way galactic band
             float galPlane = abs(dot(celDir, normalize(vec3(0.48, 0.36, -0.80))));
-            float milkyWay = exp(-galPlane * galPlane * 14.0) * 0.042;
-            vec3 milkyColor = mix(vec3(0.06, 0.12, 0.26), vec3(0.16, 0.22, 0.38), smoothstep(0.25, 0.0, galPlane));
+            float milkyWay = exp(-galPlane * galPlane * 16.0) * 0.032;
+            vec3 milkyColor = mix(vec3(0.05, 0.10, 0.22), vec3(0.14, 0.20, 0.34), smoothstep(0.25, 0.0, galPlane));
             skyColor += milkyColor * milkyWay * horizonMask * atm.nightFactor * clearSky * STAR_SPARKLE_INTENSITY;
 
-            // Dual-layer twinkling stars
-            vec3 stars1 = sampleStarLayer(celDir, 76.0,  0.915, frameTimeCounter);
-            vec3 stars2 = sampleStarLayer(celDir, 148.0, 0.940, frameTimeCounter * 0.85) * 0.65;
+            // Crisp pinpoint twinkling stars (no giant crossbars)
+            vec3 stars1 = sampleStarLayer(celDir, 84.0,  0.935, frameTimeCounter);
+            vec3 stars2 = sampleStarLayer(celDir, 156.0, 0.955, frameTimeCounter * 0.85) * 0.55;
             vec3 totalStars = (stars1 + stars2) * horizonMask * atm.nightFactor * clearSky * STAR_SPARKLE_INTENSITY;
 
             skyColor += totalStars;
-            starEmission = clamp(getLuminance(totalStars) * 1.2, 0.0, 1.0);
+            starEmission = clamp(getLuminance(totalStars) * 0.45, 0.0, 0.55);
         }
     }
 

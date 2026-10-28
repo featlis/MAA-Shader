@@ -7,13 +7,13 @@
 // Light Source Color Palette (Linear HDR space)
 // ============================================================================
 const vec3 COLOR_TORCH_CORE = vec3(1.00, 0.85, 0.56);
-const vec3 COLOR_TORCH_WARM = vec3(1.00, 0.56, 0.20);
+const vec3 COLOR_TORCH_WARM = vec3(1.00, 0.58, 0.22);
 const vec3 COLOR_GOLD_GLOW  = vec3(1.00, 0.72, 0.28);
-const vec3 COLOR_SOUL_CYAN  = vec3(0.12, 0.82, 1.00);
-const vec3 COLOR_REDSTONE   = vec3(1.00, 0.10, 0.05);
-const vec3 COLOR_LAVA_FIRE  = vec3(1.00, 0.36, 0.04);
-const vec3 COLOR_SEA_AQUA   = vec3(0.66, 0.96, 1.00);
-const vec3 COLOR_END_VIOLET = vec3(0.88, 0.64, 1.00);
+const vec3 COLOR_SOUL_CYAN  = vec3(0.18, 0.76, 0.95);
+const vec3 COLOR_REDSTONE   = vec3(1.00, 0.12, 0.06);
+const vec3 COLOR_LAVA_FIRE  = vec3(1.00, 0.38, 0.05);
+const vec3 COLOR_SEA_AQUA   = vec3(0.56, 0.80, 0.88);
+const vec3 COLOR_END_VIOLET = vec3(0.84, 0.60, 0.96);
 
 // Returns the characteristic linear light color for an emissive material ID
 vec3 getEmissiveColorFromMat(float matId, float blockLightLevel) {
