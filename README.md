@@ -1,4 +1,5 @@
-# MAA-Shader
+# 全部AI任せで無責任シェーダー！！！！！！！
+# Minecraft-ALL-AI MAA-Shader
 
 **シネマティック＆リアル、かつ圧倒的に軽量なMinecraft影MOD（シェーダーパック）**
 
